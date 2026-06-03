@@ -1,0 +1,49 @@
+# ─── 依赖 ───
+node_modules/
+.pnpm-store/
+
+# ─── 构建产物 ───
+gui/dist/
+dist/
+build/
+*.tsbuildinfo
+
+# ─── 本地数据 ───
+database/*.db
+database/*.db-*
+data/
+*.sqlite
+*.sqlite-*
+
+# ─── 运行时 ───
+*.log
+*.pid
+.cache/
+.tmp/
+tmp/
+
+# ─── 环境变量 / 密钥 ───
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ─── 编辑器 / 系统 ───
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.history/
+
+# ─── Vite / esbuild ───
+.vite/
+
+# ─── 测试覆盖率 ───
+coverage/
+.nyc_output/
+
+# ─── 其它 ───
+*.bak

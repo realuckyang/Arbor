@@ -1,0 +1,187 @@
+@import "tailwindcss";
+
+/* ───────────────────────────────────────────────
+   Notion-inspired theme
+   ─────────────────────────────────────────────── */
+@theme {
+  /* 背景:全白 + 几档浅灰 */
+  --color-bg:        #ffffff;
+  --color-bg-raised: #fbfbfa;        /* Notion 侧边栏底色 */
+  --color-bg-panel:  #f7f7f5;        /* 卡片/code 块底 */
+  --color-bg-inset:  #f1f1ef;        /* 更深一档 */
+  --color-bg-hover:  #efefed;        /* hover 灰 */
+
+  /* 边线极细极淡 */
+  --color-border:        #ebebea;
+  --color-border-strong: #d3d3d1;
+
+  /* 文字 — Notion 招牌灰 #37352f */
+  --color-text:       #37352f;
+  --color-text-dim:   #5f5e5b;
+  --color-text-faint: #9b9a97;
+
+  /* 主色:Notion 蓝。注意 soft 用极淡的色,避免重色块感 */
+  --color-accent:        #2383e2;
+  --color-accent-soft:   #e7f0f9;
+
+  /* 角色色:克制版本 */
+  --color-success: #0f7b6c;
+  --color-warning: #cb6b16;
+  --color-danger:  #e03e3e;
+
+  /* 字体:Inter / 系统 */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
+               "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+}
+
+html, body, #app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv02", "cv03", "cv11";    /* Inter 调字形 */
+  color: var(--color-text);
+  background: var(--color-bg);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+/* 极细滚动条 */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 8px;
+}
+*:hover::-webkit-scrollbar-thumb { background: #d9d8d4; }
+::-webkit-scrollbar-thumb:hover { background: #b9b8b3; }
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+*:hover { scrollbar-color: #d9d8d4 transparent; }
+
+::selection {
+  background: rgba(35, 131, 226, 0.18);
+}
+
+/* 拖拽 */
+.is-dragging { opacity: 0.4; }
+.drop-target {
+  background: var(--color-accent-soft) !important;
+  outline: 1px solid var(--color-accent);
+  outline-offset: -1px;
+  border-radius: 6px;
+}
+
+/* ───────────────────────────────────────────────
+   Markdown prose — Notion 风格
+   ─────────────────────────────────────────────── */
+.prose {
+  color: var(--color-text);
+  font-size: 16px;
+  line-height: 1.75;
+}
+.prose > * + * { margin-top: 0.6em; }
+.prose p { margin: 0; }
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  font-weight: 600;
+  color: var(--color-text);
+  margin-top: 1.4em;
+  margin-bottom: 0.2em;
+  line-height: 1.3;
+}
+.prose h1 { font-size: 1.55em; }
+.prose h2 { font-size: 1.3em; }
+.prose h3 { font-size: 1.13em; }
+.prose h4 { font-size: 1em; }
+.prose > h1:first-child, .prose > h2:first-child, .prose > h3:first-child { margin-top: 0; }
+
+.prose ul, .prose ol { margin: 0.4em 0; padding-left: 1.5em; }
+.prose ul { list-style: disc; }
+.prose ol { list-style: decimal; }
+.prose li { margin: 0.15em 0; }
+.prose li > p { margin: 0; }
+
+.prose code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--color-bg-panel);
+  color: #eb5757;
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+.prose pre {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-size: 13.5px;
+  line-height: 1.6;
+  margin: 0.6em 0;
+}
+.prose pre code {
+  background: transparent;
+  color: var(--color-text);
+  padding: 0;
+  font-size: inherit;
+}
+.prose blockquote {
+  margin: 0.4em 0;
+  padding: 0.1em 0 0.1em 12px;
+  border-left: 3px solid var(--color-border-strong);
+  color: var(--color-text-dim);
+}
+.prose a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose strong { font-weight: 600; }
+.prose em { font-style: italic; }
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin: 1em 0;
+}
+.prose table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  font-size: 0.95em;
+  display: block;
+  overflow-x: auto;
+}
+.prose th, .prose td {
+  border: 1px solid var(--color-border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.prose th { background: var(--color-bg-panel); font-weight: 600; }
+.prose img { max-width: 100%; border-radius: 4px; }
+.prose input[type="checkbox"] { margin-right: 0.5em; }
+
+/* 横向滚动隐藏滚动条(面包屑用) */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ───────────────────────────────────────────────
+   Tiptap / ProseMirror
+   ─────────────────────────────────────────────── */
+.ProseMirror:focus { outline: none; }
+.ProseMirror { min-height: 100%; }
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--color-text-faint);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+/* checkbox 列表 */
+.ProseMirror ul[data-type="taskList"] { list-style: none; padding-left: 0.4em; }
+.ProseMirror ul[data-type="taskList"] li { display: flex; gap: 0.4em; }
+.ProseMirror ul[data-type="taskList"] li > label { margin-top: 0.3em; }

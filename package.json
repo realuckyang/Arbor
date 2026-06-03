@@ -1,0 +1,36 @@
+{
+  "name": "arbor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx ./index.ts",
+    "dev": "tsx watch ./index.ts",
+    "gui": "vite --config gui/vite.config.ts gui",
+    "build": "vite --config gui/vite.config.ts build gui",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.4",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.2.0",
+    "tailwindcss": "^4.2.4",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "vite": "^6.3.5"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@tiptap/extension-placeholder": "^3.25.0",
+    "@tiptap/pm": "^3.25.0",
+    "@tiptap/react": "^3.25.0",
+    "@tiptap/starter-kit": "^3.25.0",
+    "lucide-react": "^0.408.0",
+    "marked": "^18.0.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "ws": "^8.21.0"
+  }
+}
