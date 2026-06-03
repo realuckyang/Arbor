@@ -1,0 +1,63 @@
+name: 🐛 Bug Report
+description: 报告一个 bug
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么
+      description: 简洁描述出问题的现象
+      placeholder: 在 ... 时,看到 ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 一步步告诉别人怎么重现
+      placeholder: |
+        1. 启动 ...
+        2. 在 GUI 里 ...
+        3. 观察到 ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+      placeholder: 应该 ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 提交 hash / 版本
+      placeholder: 例如 git rev-parse HEAD
+    validations:
+      required: false
+
+  - type: dropdown
+    id: env
+    attributes:
+      label: 环境
+      multiple: true
+      options:
+        - macOS
+        - Linux
+        - Windows
+        - 桌面浏览器
+        - 移动浏览器
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 截图
+      description: 服务端日志(arbor.log)、浏览器控制台错误、截图
+      render: text
+    validations:
+      required: false

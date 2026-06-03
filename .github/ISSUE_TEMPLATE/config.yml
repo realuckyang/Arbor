@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 提问 / 想法讨论
+    url: https://github.com/realuckyang/Arbor/discussions
+    about: 用 Discussions 做开放讨论;Issue 留给 bug 和明确的 feature
