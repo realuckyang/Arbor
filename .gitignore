@@ -9,11 +9,13 @@ build/
 *.tsbuildinfo
 
 # ─── 本地数据 ───
-database/*.db
-database/*.db-*
-data/
+# 任何位置的 sqlite 文件(避免根目录意外生成 db 时漏拦)
+*.db
+*.db-*
 *.sqlite
 *.sqlite-*
+database/
+data/
 
 # ─── 运行时 ───
 *.log
