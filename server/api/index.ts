@@ -1,24 +1,11 @@
 // @ts-nocheck
+// HTTP 层:只管解析请求 / 拼响应,业务都委托给 service。
 import fs from "fs";
 import nodePath from "path";
-import {
-  getItem,
-  listChildren,
-  listAll,
-  createItem,
-  updateItem,
-  deleteItem,
-  moveItem,
-  ancestry,
-  markRead,
-  unreadMap,
-  resolveFileAbs,
-} from "../repo/tree.js";
+import * as tree from "../service/tree.js";
 import { listMessages } from "../repo/messages.js";
-import { listCalls, latestCallStatusMap } from "../repo/calls.js";
-import { searchContent } from "../repo/search.js";
+import { listCalls } from "../repo/calls.js";
 import { getSettings, saveSettings } from "../repo/settings.js";
-import { emit } from "../bus.js";
 
 const parseBody = async (req) => {
   const chunks = [];
@@ -31,19 +18,6 @@ const json = (res, code, data) => {
   res.end(JSON.stringify(data, null, 2) + "\n");
 };
 
-// 给对话(conversation)附加运行状态点 + 未读
-const enrichWithStatus = (items) => {
-  const convIds = items.filter((n) => n.kind === "conversation").map((n) => n.id);
-  if (!convIds.length) return items;
-  const statusMap = latestCallStatusMap(convIds);
-  const unread = unreadMap(convIds);
-  return items.map((n) =>
-    n.kind === "conversation"
-      ? { ...n, status: statusMap[n.id] || "idle", unread: !!unread[n.id] }
-      : n,
-  );
-};
-
 const handleApi = async (req, res) => {
   const url = new URL(req.url || "/", "http://127.0.0.1");
   const path = url.pathname;
@@ -52,25 +26,15 @@ const handleApi = async (req, res) => {
   try {
     if (path === "/health") return json(res, 200, { ok: true });
 
-    // ---- tree(统一树:空间 / 对话 / 文件)----
+    // ---- tree(统一树:文件夹 / 对话 / 文件)----
     if (path === "/api/tree") {
       if (method === "GET") {
-        const parentId = url.searchParams.get("parentId");
-        const list = !parentId ? listChildren(null) : listChildren(parentId);
-        return json(res, 200, { ok: true, items: enrichWithStatus(list) });
+        return json(res, 200, { ok: true, items: tree.listChildren(url.searchParams.get("parentId")) });
       }
       if (method === "POST") {
         const body = await parseBody(req);
         try {
-          const item = createItem({
-            kind: body.kind || "space",
-            parentId: body.parentId || null,
-            title: body.title || "",
-            system: body.system ?? null,
-            content: body.content ?? null,
-          });
-          emit({ type: "tree_changed", item, reason: "created" });
-          return json(res, 201, { ok: true, item });
+          return json(res, 201, { ok: true, item: tree.create(body) });
         } catch (error) {
           return json(res, 400, { ok: false, error: error.message });
         }
@@ -79,50 +43,41 @@ const handleApi = async (req, res) => {
         const id = url.searchParams.get("id");
         const body = await parseBody(req);
         try {
-          if (body.title !== undefined || body.system !== undefined || body.content !== undefined) {
-            updateItem(id, { title: body.title, system: body.system, content: body.content });
-          }
-          if (body.parentId !== undefined || body.position !== undefined) {
-            const item = getItem(id);
-            const targetParent = body.parentId !== undefined ? body.parentId : item?.parent_id;
-            moveItem(id, targetParent, body.position);
-          }
+          return json(res, 200, { ok: true, item: tree.update(id, body) });
         } catch (error) {
           return json(res, 400, { ok: false, error: error.message });
         }
-        const item = getItem(id);
-        emit({ type: "tree_changed", item, reason: "updated" });
-        return json(res, 200, { ok: true, item });
       }
       if (method === "DELETE") {
-        const id = url.searchParams.get("id");
-        deleteItem(id);
-        emit({ type: "tree_changed", id, reason: "deleted" });
+        tree.remove(url.searchParams.get("id"));
         return json(res, 200, { ok: true });
       }
     }
 
     if (path === "/api/tree/get") {
-      const id = url.searchParams.get("id");
-      const item = getItem(id);
+      const item = tree.getItem(url.searchParams.get("id"));
       if (!item) return json(res, 404, { ok: false, error: "not found" });
-      return json(res, 200, { ok: true, item: enrichWithStatus([item])[0] });
+      return json(res, 200, { ok: true, item });
     }
 
     // 全树扁平列表(⌘P 快速打开)
     if (path === "/api/tree/all" && method === "GET") {
-      return json(res, 200, { ok: true, items: enrichWithStatus(listAll()) });
+      return json(res, 200, { ok: true, items: tree.listAll() });
+    }
+
+    // 标记对话已读
+    if (path === "/api/tree/read" && method === "POST") {
+      return json(res, 200, { ok: true, item: tree.markRead(url.searchParams.get("id")) });
     }
 
     // 全局内容搜索(⌘⇧F):grep 真实文件
     if (path === "/api/search" && method === "GET") {
-      const q = url.searchParams.get("q") || "";
-      return json(res, 200, { ok: true, results: q ? searchContent(q) : [] });
+      return json(res, 200, { ok: true, results: tree.search(url.searchParams.get("q") || "") });
     }
 
     // 原始文件流(图片/PDF 等二进制预览用)
     if (path === "/api/file/raw" && method === "GET") {
-      const abs = resolveFileAbs(url.searchParams.get("id"));
+      const abs = tree.fileRawAbs(url.searchParams.get("id"));
       if (!abs) return json(res, 404, { ok: false, error: "not found" });
       const RAW_MIME = {
         ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
@@ -140,22 +95,13 @@ const handleApi = async (req, res) => {
       return;
     }
 
-    // 标记对话已读
-    if (path === "/api/tree/read" && method === "POST") {
-      const id = url.searchParams.get("id");
-      const conversation = markRead(id);
-      return json(res, 200, { ok: true, item: getItem(id) });
-    }
-
     if (path === "/api/ancestry") {
-      const id = url.searchParams.get("id");
-      return json(res, 200, { ok: true, ancestry: ancestry(id) });
+      return json(res, 200, { ok: true, ancestry: tree.ancestry(url.searchParams.get("id")) });
     }
 
     // ---- messages(某个对话的邮箱)----
     if (path === "/api/messages" && method === "GET") {
-      const id = url.searchParams.get("conversationId");
-      return json(res, 200, { ok: true, messages: listMessages(id) });
+      return json(res, 200, { ok: true, messages: listMessages(url.searchParams.get("conversationId")) });
     }
 
     // ---- calls ----

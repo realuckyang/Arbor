@@ -72,28 +72,31 @@ SQLite 只存**运行时状态**(不存结构):
 
 ## 🏗 架构
 
+分层清晰:**api(HTTP)→ service(业务)→ repo(数据)**,另有 agent(无状态 LLM 执行器)。
+
 ```
 server/
-├── agent/                 ← 🧠 无状态执行器(不 import 任何 server 状态)
+├── agent/                 ← 🧠 无状态 LLM 执行器(不 import 任何 server 状态)
 │   ├── index.ts           ← chat() 入口(tool_call ↔ tool_result 循环)
 │   ├── runner.ts          ← tool 分派
 │   ├── tools.ts           ← 8 工具 schema
 │   ├── functions.ts       ← 8 工具实现(文件类工具相对对话的工作目录解析)
 │   ├── utils.ts           ← 工具结果截断
 │   └── lm/                ← LLM 调用层(common / regular / stream/parsers·openai·deepseek·kimi·gemini)
-├── conv.ts                ← 🎬 编排层(拼 system prompt + 注入工作目录、落库、回信、唤醒 caller、call 状态机)
-├── repo/
-│   ├── tree.ts            ← 💾 文件系统即树(文件夹/文件/对话 ↔ 目录/文件/.conv.json)+ 统一树 facade
+├── service/               ← 🎬 业务层
+│   ├── tree.ts            ← 树操作 + 事件广播(tree_changed)+ 给对话富化状态/未读
+│   └── conversation.ts    ← 对话编排(拼 prompt、注入工作目录、落库、回信、唤醒 caller、call 状态机)
+├── repo/                  ← 💾 纯数据访问
+│   ├── tree.ts            ← 文件系统即树(文件夹/文件/对话 ↔ 目录/文件/.conv.json)
 │   ├── search.ts          ← 全局内容 grep
-│   ├── messages.ts        ← 对话邮箱
-│   └── calls.ts / settings.ts
-├── api/index.ts           ← 🌐 REST API
+│   └── messages.ts / calls.ts / settings.ts
+├── api/index.ts           ← 🌐 HTTP(薄,只解析请求/拼响应,业务委托 service)
 ├── realtime.ts            ← 📡 WebSocket(broadcast / stop / send)
 └── bus.ts / db.ts / http.ts / static.ts
 gui/src/                   ← React 19 前端(SpaceTree 树 / ChatPanel / FilePanel / TabBar / 快开/搜索/命令面板)
 ```
 
-**关键边界**:`server/agent/` 不知道树是什么 —— 它只接收已组装好的消息和 `ctx`(含工作目录 cwd)跑 LLM 循环;`server/conv.ts` 负责落库、回信、唤醒,一切跨对话能力通过 ctx 注入。
+**关键边界**:`agent/` 不知道树是什么 —— 只接收已组装好的消息和 `ctx`(含工作目录 cwd)跑 LLM 循环;`service/` 承载业务(事件、状态、编排);`repo/` 只做纯数据访问;`api/` 只管 HTTP。
 
 ---
 

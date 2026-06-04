@@ -1,7 +1,7 @@
 // @ts-nocheck
 import WebSocket, { WebSocketServer } from "ws";
 import { setBroadcaster } from "./bus.js";
-import { runConversation, stopConversation } from "./conv.js";
+import { runConversation, stopConversation } from "./service/conversation.js";
 import { appendMessage } from "./repo/messages.js";
 
 const clients = new Set();

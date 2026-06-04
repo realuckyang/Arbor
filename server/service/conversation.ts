@@ -8,18 +8,18 @@
 //
 // agent/ 内核完全不知道 spaces/conversations/files/messages/calls 表,所有状态在这里管。
 
-import { chat } from "./agent/index.js";
-import { getConversation, createConversation, ancestry, conversationDir } from "./repo/tree.js";
-import { appendMessage, historyFor } from "./repo/messages.js";
+import { chat } from "../agent/index.js";
+import { getConversation, createConversation, ancestry, conversationDir } from "../repo/tree.js";
+import { appendMessage, historyFor } from "../repo/messages.js";
 import {
   createCall,
   markCallRunning,
   markCallDone,
   markCallError,
-} from "./repo/calls.js";
-import { getSettings } from "./repo/settings.js";
-import { getDb } from "./db.js";
-import { emit } from "./bus.js";
+} from "../repo/calls.js";
+import { getSettings } from "../repo/settings.js";
+import { getDb } from "../db.js";
+import { emit } from "../bus.js";
 
 // 一个对话所在的空间 id(create_agent 据此把新对话建在同一空间)= 它的父空间路径
 const spaceIdOf = (conversationId) => {
