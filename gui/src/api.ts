@@ -12,7 +12,13 @@ export type Space = {
   created_at: string;
   status?: "idle" | "running" | "done" | "error" | "cancelled";  // 仅 conversation,来自最新 call
   unread?: boolean;                                              // 仅 conversation
+  size?: number;                                                 // 仅 file:字节数
+  binary?: boolean;                                              // 仅 file:二进制,无法当文本预览
+  tooLarge?: boolean;                                            // 仅 file:超过文本预览上限
 };
+
+export type SearchMatch = { line: number; text: string };
+export type SearchResult = { id: string; title: string; matches: SearchMatch[] };
 
 export type Message = {
   _id?: number;
@@ -65,6 +71,9 @@ export const api = {
   listRoots: () => request<{ items: Space[] }>("/api/tree?parentId=").then(many),
   listChildren: (parentId: string) =>
     request<{ items: Space[] }>(`/api/tree?parentId=${encodeURIComponent(parentId)}`).then(many),
+  listAllNodes: () => request<{ items: Space[] }>("/api/tree/all").then(many),
+  searchContent: (q: string) =>
+    request<{ results: SearchResult[] }>(`/api/search?q=${encodeURIComponent(q)}`),
   getSpace: (id: string) =>
     request<{ item: Space }>(`/api/tree/get?id=${encodeURIComponent(id)}`).then(one),
   createSpace: (opts: { kind: Space["kind"]; title: string; parentId?: string; system?: string; content?: string }) =>

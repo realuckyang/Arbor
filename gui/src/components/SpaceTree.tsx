@@ -246,21 +246,24 @@ export function SpaceTree({
       items.push(
         { label: "新建对话", icon: <Bot size={13} className="text-warning" />,
           onClick: () => startCreate(space.id, "conversation") },
-        { label: "新建空间", icon: <Folder size={13} className="text-accent" />,
+        { label: "新建文件夹", icon: <Folder size={13} className="text-accent" />,
           onClick: () => startCreate(space.id, "space") },
         { label: "新建文件", icon: <FileText size={13} className="text-text-faint" />,
           onClick: () => startCreate(space.id, "file") },
         "divider",
       );
     }
+    // 对话:复制稳定 uuid(给 call_agent 用);空间/文件:复制相对 workspaces 的干净路径
+    const isConv = space.kind === "conversation";
+    const copyText = isConv ? space.id : space.id.replace(/^.*\/workspaces\//, "");
     items.push(
       { label: "重命名", icon: <Pencil size={13} />, onClick: () => startRename(space) },
-      { label: "复制 ID", icon: <Copy size={13} />,
+      { label: isConv ? "复制 ID" : "复制路径", icon: <Copy size={13} />,
         onClick: async () => {
-          try { await navigator.clipboard.writeText(space.id); }
+          try { await navigator.clipboard.writeText(copyText); }
           catch {
             const ta = document.createElement("textarea");
-            ta.value = space.id; document.body.appendChild(ta);
+            ta.value = copyText; document.body.appendChild(ta);
             ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
           }
         },
@@ -285,7 +288,7 @@ export function SpaceTree({
       items: [
         { label: "新建对话", icon: <Bot size={13} className="text-warning" />,
           onClick: () => startCreate(null, "conversation") },
-        { label: "新建空间", icon: <Folder size={13} className="text-accent" />,
+        { label: "新建文件夹", icon: <Folder size={13} className="text-accent" />,
           onClick: () => startCreate(null, "space") },
         { label: "新建文件", icon: <FileText size={13} className="text-text-faint" />,
           onClick: () => startCreate(null, "file") },
@@ -309,7 +312,7 @@ export function SpaceTree({
       x: r.left, y: r.bottom + 4,
       items: [
         { label: "新建对话", icon: <Bot size={13} className="text-warning" />, onClick: () => startCreate(parentId, "conversation") },
-        { label: "新建空间", icon: <Folder size={13} className="text-accent" />, onClick: () => startCreate(parentId, "space") },
+        { label: "新建文件夹", icon: <Folder size={13} className="text-accent" />, onClick: () => startCreate(parentId, "space") },
         { label: "新建文件", icon: <FileText size={13} className="text-text-faint" />, onClick: () => startCreate(parentId, "file") },
       ],
     });
@@ -377,7 +380,7 @@ export function SpaceTree({
             <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
               <div className="text-3xl opacity-80">🌱</div>
               <div className="text-[13px] text-text-faint leading-relaxed">
-                还空着。<br />新建一个对话或空间开始生长。
+                还空着。<br />新建一个对话或文件夹开始生长。
               </div>
               <button
                 onClick={() => startCreate(null, "conversation")}

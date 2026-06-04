@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Space } from "../api";
 import { api } from "../api";
-import { ChevronRight, Folder, FileText, Bot } from "lucide-react";
+import { ChevronRight, Folder, FileText, Bot, FileCode, FileJson, Image, Hash, FileType } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 
 export type DropPosition = "before" | "after" | "into";
@@ -29,8 +29,20 @@ export type TreeControls = {
   dropPos: DropPosition | null;
 };
 
-const iconFor = (kind: Space["kind"]) =>
-  kind === "space" ? Folder : kind === "conversation" ? Bot : FileText;
+// 按扩展名挑文件图标(VSCode 风)
+const fileIconFor = (title: string) => {
+  const ext = title.split(".").pop()?.toLowerCase() || "";
+  if (["ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "go", "rs", "java", "c", "cpp", "sh"].includes(ext)) return FileCode;
+  if (["html", "htm", "xml", "vue", "svelte", "css", "scss", "less"].includes(ext)) return FileCode;
+  if (ext === "json") return FileJson;
+  if (["md", "markdown"].includes(ext)) return Hash;
+  if (["png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp", "avif"].includes(ext)) return Image;
+  if (["txt", "log"].includes(ext)) return FileType;
+  return FileText;
+};
+
+const iconFor = (kind: Space["kind"], title?: string) =>
+  kind === "space" ? Folder : kind === "conversation" ? Bot : title ? fileIconFor(title) : FileText;
 const colorFor = (kind: Space["kind"]) =>
   kind === "space" ? "text-accent" : kind === "conversation" ? "text-warning" : "text-text-faint";
 
@@ -90,7 +102,7 @@ export function SpaceRow({
   };
 
   const isSelected = selectedId === space.id;
-  const Icon = iconFor(space.kind);
+  const Icon = iconFor(space.kind, space.title);
   const iconColor = colorFor(space.kind);
 
   const showInputHere = isContainer && controls.creatingUnder === space.id;
@@ -242,7 +254,7 @@ export function InlineCreateRow({ depth, controls }: { depth: number; controls: 
         placeholder={
           controls.creatingKind === "conversation" ? "对话名…"
             : controls.creatingKind === "file" ? "文件名…"
-            : "空间名…"
+            : "文件夹名…"
         }
         className="flex-1 min-w-0 bg-white border border-accent rounded px-1 -mx-1 py-px text-[14px] text-text outline-none placeholder:text-text-faint"
       />

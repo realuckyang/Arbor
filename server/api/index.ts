@@ -1,16 +1,22 @@
 // @ts-nocheck
+import fs from "fs";
+import nodePath from "path";
 import {
   getItem,
   listChildren,
+  listAll,
   createItem,
   updateItem,
   deleteItem,
   moveItem,
   ancestry,
+  markRead,
+  unreadMap,
+  resolveFileAbs,
 } from "../repo/tree.js";
-import { markRead, unreadMap } from "../repo/conversations.js";
 import { listMessages } from "../repo/messages.js";
 import { listCalls, latestCallStatusMap } from "../repo/calls.js";
+import { searchContent } from "../repo/search.js";
 import { getSettings, saveSettings } from "../repo/settings.js";
 import { emit } from "../bus.js";
 
@@ -101,6 +107,37 @@ const handleApi = async (req, res) => {
       const item = getItem(id);
       if (!item) return json(res, 404, { ok: false, error: "not found" });
       return json(res, 200, { ok: true, item: enrichWithStatus([item])[0] });
+    }
+
+    // 全树扁平列表(⌘P 快速打开)
+    if (path === "/api/tree/all" && method === "GET") {
+      return json(res, 200, { ok: true, items: enrichWithStatus(listAll()) });
+    }
+
+    // 全局内容搜索(⌘⇧F):grep 真实文件
+    if (path === "/api/search" && method === "GET") {
+      const q = url.searchParams.get("q") || "";
+      return json(res, 200, { ok: true, results: q ? searchContent(q) : [] });
+    }
+
+    // 原始文件流(图片/PDF 等二进制预览用)
+    if (path === "/api/file/raw" && method === "GET") {
+      const abs = resolveFileAbs(url.searchParams.get("id"));
+      if (!abs) return json(res, 404, { ok: false, error: "not found" });
+      const RAW_MIME = {
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml",
+        ".ico": "image/x-icon", ".bmp": "image/bmp", ".avif": "image/avif",
+        ".pdf": "application/pdf",
+      };
+      const ext = nodePath.extname(abs).toLowerCase();
+      res.writeHead(200, {
+        "Content-Type": RAW_MIME[ext] || "application/octet-stream",
+        "Cache-Control": "no-cache",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(fs.readFileSync(abs));
+      return;
     }
 
     // 标记对话已读

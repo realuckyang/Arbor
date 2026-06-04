@@ -6,13 +6,20 @@ import { TabBar } from "./components/TabBar";
 import { ChatPanel } from "./components/ChatPanel";
 import { FilePanel } from "./components/FilePanel";
 import { SettingsPanel } from "./components/SettingsPanel";
-import { Menu } from "lucide-react";
+import { QuickOpen } from "./components/QuickOpen";
+import { CommandPalette, type Command } from "./components/CommandPalette";
+import { SearchPanel } from "./components/SearchPanel";
+import { Menu, FileText, Folder, Bot, Search, Settings as SettingsIcon, X } from "lucide-react";
 
 export function App() {
   const socket = useSocket();
   const [showSettings, setShowSettings] = useState(false);
   const [treeRefresh, setTreeRefresh] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [pendingGoto, setPendingGoto] = useState<{ id: string; line: number } | null>(null);
 
   // ── 多标签 ──
   const [tabs, setTabs] = useState<Space[]>([]);
@@ -111,6 +118,53 @@ export function App() {
     return () => { cancelled = true; };
   }, [treeRefresh]);
 
+  // 全局快捷键:⌘P 快开 / ⌘⇧P 命令面板 / ⌘⇧F 搜索
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        if (e.shiftKey) { setCmdOpen((v) => !v); setQuickOpen(false); }
+        else { setQuickOpen((v) => !v); setCmdOpen(false); }
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setSearchOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // 在根目录新建(命令面板用,名字走 prompt)
+  const createAtRoot = async (kind: Space["kind"]) => {
+    const title = window.prompt(`新建${kind === "space" ? "文件夹" : kind === "conversation" ? "对话" : "文件"}的名字:`);
+    if (!title || !title.trim()) return;
+    try {
+      const r = await api.createSpace({ kind, title: title.trim() });
+      openNode(r.space);
+      setTreeRefresh((n) => n + 1);
+    } catch (e: any) {
+      alert(e.message || "新建失败");
+    }
+  };
+
+  // 搜索命中:打开文件并跳转到行
+  const openAt = async (id: string, line: number) => {
+    const r = await api.getSpace(id).catch(() => null);
+    if (r?.space) { openNode(r.space); setPendingGoto({ id, line }); }
+  };
+
+  const commands: Command[] = [
+    { id: "new-conversation", label: "新建对话", icon: <Bot size={14} />, run: () => createAtRoot("conversation") },
+    { id: "new-space", label: "新建文件夹", icon: <Folder size={14} />, run: () => createAtRoot("space") },
+    { id: "new-file", label: "新建文件", icon: <FileText size={14} />, run: () => createAtRoot("file") },
+    { id: "quick-open", label: "快速打开…", hint: "⌘P", icon: <Search size={14} />, run: () => setQuickOpen(true) },
+    { id: "search", label: "在所有文件中搜索…", hint: "⌘⇧F", icon: <Search size={14} />, run: () => setSearchOpen(true) },
+    { id: "settings", label: "打开设置", icon: <SettingsIcon size={14} />, run: () => setShowSettings(true) },
+    { id: "close-tab", label: "关闭当前标签", icon: <X size={14} />, run: () => { if (activeId) closeTab(activeId); } },
+    { id: "close-all", label: "关闭所有标签", icon: <X size={14} />, run: () => { setTabs([]); setActiveId(null); } },
+  ];
+
   const openNav = () => setMobileNavOpen(true);
   const closeNav = () => setMobileNavOpen(false);
 
@@ -126,6 +180,10 @@ export function App() {
         onCloseMobile={closeNav}
         onChanged={() => setTreeRefresh((n) => n + 1)}
       />
+
+      {quickOpen && <QuickOpen onPick={(n) => openNode(n)} onClose={() => setQuickOpen(false)} />}
+      {cmdOpen && <CommandPalette commands={commands} onClose={() => setCmdOpen(false)} />}
+      {searchOpen && <SearchPanel onOpenAt={openAt} onClose={() => setSearchOpen(false)} />}
 
       {/* 移动端遮罩 */}
       {mobileNavOpen && (
@@ -159,6 +217,7 @@ export function App() {
               key={active.id}
               space={active}
               draft={drafts[active.id]}
+              gotoLine={pendingGoto?.id === active.id ? pendingGoto.line : undefined}
               onChange={(v) => onFileChange(active.id, v)}
               onSaved={() => onFileSaved(active.id)}
             />

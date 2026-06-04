@@ -66,7 +66,7 @@ export function TabBar({
       )}
 
       {tabs.map((t, idx) => {
-        const Icon = iconFor(t.kind);
+        const Icon = iconFor(t.kind, t.title);
         const active = t.id === activeId;
         const running = t.kind === "conversation" && t.status === "running";
         const unread = t.kind === "conversation" && t.unread && !active;
