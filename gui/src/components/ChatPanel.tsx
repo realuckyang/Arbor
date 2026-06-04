@@ -98,7 +98,7 @@ export function ChatPanel({
   };
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-bg">
+    <div className="flex-1 min-h-0 flex flex-col min-w-0 bg-bg">
       {/* 滚动区:直接是消息(标题/路径在标签栏里已有,不再重复)*/}
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-4 md:px-12 pt-6 pb-8 flex flex-col gap-4">
@@ -213,6 +213,10 @@ function groupMessages(messages: Message[]): GroupedItem[] {
     }
 
     if (msg.role === "assistant") {
+      // 先文本后工具:assistant 通常先说一句,再去调工具(顺序必须文本在前)
+      if (msg.content) {
+        items.push({ _id: `a:${msg._id}`, type: "assistant_text", content: msg.content });
+      }
       const tcs = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
       if (tcs.length > 0) {
         const pairs: ToolPair[] = tcs.map((tc: any) => {
@@ -221,9 +225,6 @@ function groupMessages(messages: Message[]): GroupedItem[] {
           return p;
         });
         items.push({ _id: `tg:${msg._id}`, type: "tool_group", pairs });
-      }
-      if (msg.content) {
-        items.push({ _id: `a:${msg._id}`, type: "assistant_text", content: msg.content });
       }
       continue;
     }
