@@ -240,12 +240,13 @@ export function SpaceTree({
   const onNodeContext = (e: React.MouseEvent, space: Space) => {
     e.preventDefault();
     e.stopPropagation();
-    handleSelect(space);
+    onSelect(space); // 选中但不关移动端侧栏(handleSelect 会关,菜单就跟着没了)
     const items: MenuItem[] = [];
     if (space.kind === "space") {
       items.push(
         { label: "新建对话", icon: <Bot size={13} className="text-warning" />,
           onClick: () => startCreate(space.id, "conversation") },
+        "divider",
         { label: "新建文件夹", icon: <Folder size={13} className="text-accent" />,
           onClick: () => startCreate(space.id, "space") },
         { label: "新建文件", icon: <FileText size={13} className="text-text-faint" />,
@@ -288,6 +289,7 @@ export function SpaceTree({
       items: [
         { label: "新建对话", icon: <Bot size={13} className="text-warning" />,
           onClick: () => startCreate(null, "conversation") },
+        "divider",
         { label: "新建文件夹", icon: <Folder size={13} className="text-accent" />,
           onClick: () => startCreate(null, "space") },
         { label: "新建文件", icon: <FileText size={13} className="text-text-faint" />,
@@ -312,6 +314,7 @@ export function SpaceTree({
       x: r.left, y: r.bottom + 4,
       items: [
         { label: "新建对话", icon: <Bot size={13} className="text-warning" />, onClick: () => startCreate(parentId, "conversation") },
+        "divider",
         { label: "新建文件夹", icon: <Folder size={13} className="text-accent" />, onClick: () => startCreate(parentId, "space") },
         { label: "新建文件", icon: <FileText size={13} className="text-text-faint" />, onClick: () => startCreate(parentId, "file") },
       ],
