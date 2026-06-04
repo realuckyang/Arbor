@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Space, Message } from "../api";
 import { api } from "../api";
-import { Send, Square, Bot, PhoneCall, Sparkles } from "lucide-react";
-import { Breadcrumb } from "./Breadcrumb";
+import { Send, Square, Bot, PhoneCall, Sparkles, Settings } from "lucide-react";
 import { renderMarkdown } from "../lib/markdown";
 import { ToolBlock, type ToolPair } from "./ToolBlock";
 
@@ -11,19 +10,29 @@ export function ChatPanel({
   onSelect,
   socket,
   onOpenNav,
+  onOpenSettings,
 }: {
   space: Space;
   onSelect: (n: Space) => void;
   socket: { send: (m: any) => void; on: (t: string, fn: (p: any) => void) => () => void };
   onOpenNav?: () => void;
+  onOpenSettings?: () => void;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState("");      // 当前正在流式生成的 assistant 文本
   const [prompt, setPrompt] = useState("");
   const [sending, setSending] = useState(false);
+  const [configured, setConfigured] = useState(true);  // 先假设已配置,避免初次闪现引导
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false); // 中文 IME 组词中
+
+  // 没配模型的话发消息会一片空白 → 显示引导
+  useEffect(() => {
+    api.getSettings()
+      .then((r) => { const s = r.settings || ({} as any); setConfigured(!!(s.model && s.apiUrl)); })
+      .catch(() => {});
+  }, [space.id]);
 
   const loadMessages = useCallback(async () => {
     const result = await api.listMessages(space.id);
@@ -39,32 +48,32 @@ export function ChatPanel({
   }, [space.id, loadMessages]);
 
   useEffect(() => {
-    socket.send({ type: "subscribe", spaceId: space.id });
+    socket.send({ type: "subscribe", conversationId: space.id });
     const offDelta = socket.on("delta", (p: any) => {
-      if (p.spaceId !== space.id) return;
+      if (p.conversationId !== space.id) return;
       if (p.content) setStreaming((prev) => prev + p.content);
     });
     const offMsg = socket.on("message", (p: any) => {
-      if (p.spaceId !== space.id) return;
+      if (p.conversationId !== space.id) return;
       setStreaming("");                                     // 完整消息到了,清空流式 buffer
       setMessages((prev) => [...prev, p.message]);
       api.markSpaceRead(space.id).catch(() => {});
     });
     const offEnd = socket.on("end", (p: any) => {
-      if (p.spaceId !== space.id) return;
+      if (p.conversationId !== space.id) return;
       setSending(false);
       setStreaming("");
       loadMessages();
       api.markSpaceRead(space.id).catch(() => {});
     });
     const offErr = socket.on("error", (p: any) => {
-      if (p.spaceId !== space.id) return;
+      if (p.conversationId !== space.id) return;
       setSending(false);
       setStreaming("");
     });
     return () => {
       offDelta(); offMsg(); offEnd(); offErr();
-      socket.send({ type: "unsubscribe", spaceId: space.id });
+      socket.send({ type: "unsubscribe", conversationId: space.id });
     };
   }, [space.id, socket, loadMessages]);
 
@@ -82,29 +91,17 @@ export function ChatPanel({
   const send = () => {
     const text = prompt.trim();
     if (!text || sending) return;
+    if (!configured) { onOpenSettings?.(); return; } // 没配模型:引导去设置,不空发
     setSending(true);
     setPrompt("");
-    socket.send({ type: "send", spaceId: space.id, prompt: text });
+    socket.send({ type: "send", conversationId: space.id, prompt: text });
   };
 
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-bg">
-      {/* 顶栏:面包屑+汉堡 — 固定,保持导航始终可用 */}
-      <Breadcrumb spaceId={space.id} onJump={onSelect} onOpenNav={onOpenNav} />
-
-      {/* 滚动区:文档头 + 消息一起自然滚动 */}
-      <div className="flex-1 overflow-y-auto">
-        {/* 文档头 */}
-        <div className="px-4 md:px-12 pt-8 md:pt-12 pb-6">
-          <div className="text-4xl mb-2">🤖</div>
-          <h1 className="text-[28px] md:text-[36px] font-bold text-text leading-tight">{space.title}</h1>
-          {space.system && (
-            <p className="mt-2 text-[14px] text-text-faint leading-relaxed">{space.system.slice(0, 200)}</p>
-          )}
-        </div>
-
-        {/* 消息 */}
-        <div className="px-4 md:px-12 pb-8 flex flex-col gap-4">
+      {/* 滚动区:直接是消息(标题/路径在标签栏里已有,不再重复)*/}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="px-4 md:px-12 pt-6 pb-8 flex flex-col gap-4">
           {messages.length === 0 && !sending && (
             <div className="text-text-faint text-[14px]">说点什么开始对话…</div>
           )}
@@ -122,8 +119,26 @@ export function ChatPanel({
         </div>
       </div>
 
-      {/* 输入框 — 固定底部 */}
-      <div className="px-4 md:px-12 py-4 border-t border-border bg-bg">
+      {/* 未配置模型:引导横幅 */}
+      {!configured && (
+        <div className="shrink-0 px-4 md:px-6 pt-4">
+          <div className="flex items-center gap-2.5 rounded-lg border border-warning/40 bg-warning/5 px-3.5 py-2.5">
+            <Settings size={15} className="text-warning shrink-0" />
+            <span className="flex-1 text-[13px] text-text leading-snug">
+              还没配置模型,无法对话 —— 先填一下 API URL / Key / Model。
+            </span>
+            <button
+              onClick={() => onOpenSettings?.()}
+              className="shrink-0 px-2.5 py-1 rounded bg-accent text-white text-[12.5px] hover:opacity-90 transition-opacity"
+            >
+              去设置
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 输入框 — 固定底部(四边等距内边距) */}
+      <div className="p-4 md:p-6 border-t border-border bg-bg">
         <div className="flex items-end gap-2 rounded-lg border border-border bg-white px-3 py-2 focus-within:border-accent transition-colors">
           <textarea
             ref={inputRef}
@@ -151,7 +166,7 @@ export function ChatPanel({
           />
           {sending ? (
             <button
-              onClick={() => socket.send({ type: "stop", spaceId: space.id })}
+              onClick={() => socket.send({ type: "stop", conversationId: space.id })}
               className="w-8 h-8 rounded flex items-center justify-center text-text-faint hover:text-danger hover:bg-bg-hover transition-colors shrink-0"
             >
               <Square size={14} />

@@ -30,9 +30,9 @@ export type TreeControls = {
 };
 
 const iconFor = (kind: Space["kind"]) =>
-  kind === "folder" ? Folder : kind === "agent" ? Bot : FileText;
+  kind === "space" ? Folder : kind === "conversation" ? Bot : FileText;
 const colorFor = (kind: Space["kind"]) =>
-  kind === "folder" ? "text-accent" : kind === "agent" ? "text-warning" : "text-text-faint";
+  kind === "space" ? "text-accent" : kind === "conversation" ? "text-warning" : "text-text-faint";
 
 export function SpaceRow({
   space,
@@ -54,7 +54,7 @@ export function SpaceRow({
   const [children, setChildren] = useState<Space[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  const isContainer = space.kind === "folder";
+  const isContainer = space.kind === "space";
   const expanded = controls.expandedIds.has(space.id);
   const isRenaming = controls.renamingId === space.id;
   const isDragging = controls.activeId === space.id;
@@ -111,7 +111,12 @@ export function SpaceRow({
         ref={setRef}
         {...attributes}
         {...listeners}
-        onClick={() => !isRenaming && onSelect(space)}
+        onClick={() => {
+          if (isRenaming) return;
+          // 点空间整行 = 展开/收起;点对话/文件 = 打开
+          if (isContainer) controls.toggleExpand(space.id);
+          else onSelect(space);
+        }}
         onContextMenu={(e) => onContextMenu(e, space)}
         className={[
           "group relative flex items-center gap-1.5 py-[3px] pr-2 rounded cursor-pointer select-none text-text touch-none",
@@ -152,7 +157,17 @@ export function SpaceRow({
           <span className="flex-1 min-w-0 truncate text-[14.5px]">{space.title}</span>
         )}
 
-        {space.kind === "agent" && <AgentStatusDot status={space.status} unread={space.unread} />}
+        {space.kind === "conversation" && <AgentStatusDot status={space.status} unread={space.unread} />}
+
+        {/* 更多操作:桌面 hover / 移动端常驻。快速点弹菜单,不与按住拖拽冲突 */}
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onContextMenu(e, space); }}
+          className="shrink-0 w-5 h-5 rounded flex items-center justify-center text-text-faint hover:text-text hover:bg-bg-inset opacity-0 group-hover:opacity-100 max-md:opacity-60"
+          title="更多操作"
+        >
+          <span className="text-[15px] leading-none -mt-1">⋯</span>
+        </button>
       </div>
 
       {/* drop indicator (after) */}
@@ -224,7 +239,11 @@ export function InlineCreateRow({ depth, controls }: { depth: number; controls: 
           if (e.key === "Escape") controls.cancelCreate();
         }}
         onBlur={controls.commitCreate}
-        placeholder={`new ${controls.creatingKind}…`}
+        placeholder={
+          controls.creatingKind === "conversation" ? "对话名…"
+            : controls.creatingKind === "file" ? "文件名…"
+            : "空间名…"
+        }
         className="flex-1 min-w-0 bg-white border border-accent rounded px-1 -mx-1 py-px text-[14px] text-text outline-none placeholder:text-text-faint"
       />
     </div>

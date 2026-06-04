@@ -4,7 +4,7 @@ import { api } from "../api";
 import { Folder, Bot, FileText, Menu } from "lucide-react";
 
 const iconFor = (kind: Space["kind"]) =>
-  kind === "folder" ? Folder : kind === "agent" ? Bot : FileText;
+  kind === "space" ? Folder : kind === "conversation" ? Bot : FileText;
 
 export function Breadcrumb({
   spaceId,
@@ -49,7 +49,7 @@ export function Breadcrumb({
                   isCurrent ? "font-medium text-text" : "text-text-dim hover:text-text hover:bg-bg-hover",
                 ].join(" ")}
               >
-                <Ico size={12} className={c.kind === "folder" ? "text-accent" : c.kind === "agent" ? "text-warning" : "text-text-faint"} />
+                <Ico size={12} className={c.kind === "space" ? "text-accent" : c.kind === "conversation" ? "text-warning" : "text-text-faint"} />
                 <span className="whitespace-nowrap">{c.title}</span>
               </button>
             </span>

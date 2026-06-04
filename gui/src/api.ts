@@ -1,15 +1,17 @@
+// 统一树的一个 item:kind 区分它是空间 / 对话 / 文件。
+// 存储在后端拆成 spaces / conversations / files 三张表,这里合成一棵树。
 export type Space = {
   id: string;
-  parent_id: string | null;
-  kind: "folder" | "file" | "agent";
+  parent_id: string | null;                                      // 所在空间(根 = null)
+  kind: "space" | "conversation" | "file";
   title: string;
-  system: string | null;
-  content: string | null;
+  system: string | null;                                         // 仅 conversation:人格
+  content: string | null;                                        // 仅 file:内容
   position: number | null;
-  last_read_at: string | null;
+  last_read_at: string | null;                                   // 仅 conversation
   created_at: string;
-  status?: "idle" | "running" | "done" | "error" | "cancelled"; // 仅 agent,来自最新 call
-  unread?: boolean;                                              // 仅 agent
+  status?: "idle" | "running" | "done" | "error" | "cancelled";  // 仅 conversation,来自最新 call
+  unread?: boolean;                                              // 仅 conversation
 };
 
 export type Message = {
@@ -48,43 +50,38 @@ const request = async <T>(path: string, opts: RequestInit = {}) => {
   return data as T;
 };
 
+const jsonBody = (body: any): RequestInit => ({
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
+
+// 后端返回 { item } / { items },这里统一映射成 { space } / { spaces } 供组件沿用
+const one = (d: any) => ({ space: d.item as Space });
+const many = (d: any) => ({ spaces: (d.items || []) as Space[] });
+
 export const api = {
   health: () => request<{ ok: boolean }>("/health"),
 
-  listRoots: () => request<{ spaces: Space[] }>("/api/spaces?parentId="),
+  listRoots: () => request<{ items: Space[] }>("/api/tree?parentId=").then(many),
   listChildren: (parentId: string) =>
-    request<{ spaces: Space[] }>(`/api/spaces?parentId=${encodeURIComponent(parentId)}`),
+    request<{ items: Space[] }>(`/api/tree?parentId=${encodeURIComponent(parentId)}`).then(many),
   getSpace: (id: string) =>
-    request<{ space: Space }>(`/api/spaces/get?id=${encodeURIComponent(id)}`),
+    request<{ item: Space }>(`/api/tree/get?id=${encodeURIComponent(id)}`).then(one),
   createSpace: (opts: { kind: Space["kind"]; title: string; parentId?: string; system?: string; content?: string }) =>
-    request<{ space: Space }>("/api/spaces", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(opts),
-    }),
-  updateNode: (id: string, patch: { title?: string; content?: string; parentId?: string | null }) =>
-    request<{ space: Space }>(`/api/spaces?id=${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    }),
+    request<{ item: Space }>("/api/tree", { method: "POST", ...jsonBody(opts) }).then(one),
+  updateNode: (id: string, patch: { title?: string; content?: string; system?: string; parentId?: string | null }) =>
+    request<{ item: Space }>(`/api/tree?id=${encodeURIComponent(id)}`, { method: "PATCH", ...jsonBody(patch) }).then(one),
   moveSpace: (id: string, newParentId: string | null, position?: number) =>
-    request<{ space: Space }>(`/api/spaces?id=${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ parentId: newParentId, position }),
-    }),
+    request<{ item: Space }>(`/api/tree?id=${encodeURIComponent(id)}`, { method: "PATCH", ...jsonBody({ parentId: newParentId, position }) }).then(one),
   markSpaceRead: (id: string) =>
-    request<{ space: Space }>(`/api/spaces/read?id=${encodeURIComponent(id)}`, {
-      method: "POST",
-    }),
+    request<{ item: Space }>(`/api/tree/read?id=${encodeURIComponent(id)}`, { method: "POST" }).then(one),
   deleteSpace: (id: string) =>
-    request<{ ok: boolean }>(`/api/spaces?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
+    request<{ ok: boolean }>(`/api/tree?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
   ancestry: (id: string) =>
     request<{ ancestry: Space[] }>(`/api/ancestry?id=${encodeURIComponent(id)}`),
 
-  listMessages: (spaceId: string) =>
-    request<{ messages: Message[] }>(`/api/messages?spaceId=${encodeURIComponent(spaceId)}`),
+  listMessages: (conversationId: string) =>
+    request<{ messages: Message[] }>(`/api/messages?conversationId=${encodeURIComponent(conversationId)}`),
 
   listCalls: (params: { callerId?: string; calleeId?: string; status?: string } = {}) => {
     const qs = new URLSearchParams();
@@ -97,9 +94,5 @@ export const api = {
 
   getSettings: () => request<{ settings: Settings }>("/api/settings"),
   saveSettings: (s: Settings) =>
-    request<{ settings: Settings }>("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(s),
-    }),
+    request<{ settings: Settings }>("/api/settings", { method: "POST", ...jsonBody(s) }),
 };
