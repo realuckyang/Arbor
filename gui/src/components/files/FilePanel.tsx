@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import type { Space } from "../api";
-import { api } from "../api";
+import type { Space } from "../../api";
+import { api } from "../../api";
 import { CodeEditor } from "./CodeEditor";
-import { renderMarkdown } from "../lib/markdown";
+import { renderMarkdown } from "../../lib/markdown";
 import { Eye, Code2, FileQuestion } from "lucide-react";
 
 const IMAGE_EXT = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "bmp", "avif"]);
@@ -18,12 +18,14 @@ function fmtSize(n?: number) {
 export function FilePanel({
   space,
   draft,
+  refreshKey = 0,
   gotoLine,
   onChange,
   onSaved,
 }: {
   space: Space;
   draft?: string;
+  refreshKey?: number;
   gotoLine?: number;
   onChange: (value: string) => void;
   onSaved: () => void;
@@ -32,7 +34,7 @@ export function FilePanel({
   const isImage = IMAGE_EXT.has(ext);
   const isPdf = ext === "pdf";
   const isMarkdown = ext === "md" || ext === "markdown";
-  const rawUrl = `/api/file/raw?id=${encodeURIComponent(space.id)}`;
+  const rawUrl = `/api/file/raw?id=${encodeURIComponent(space.id)}&v=${refreshKey}`;
 
   const [mdMode, setMdMode] = useState<"preview" | "edit">("preview");
   const [content, setContent] = useState<string>(draft ?? "");
@@ -60,7 +62,7 @@ export function FilePanel({
       .catch(() => { if (!cancelled) { setContent(""); latest.current = ""; setLoaded(true); } });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [space.id]);
+  }, [space.id, refreshKey]);
 
   const save = async () => {
     await api.updateNode(space.id, { content: latest.current });
@@ -101,7 +103,7 @@ export function FilePanel({
 
   const editor = (
     <CodeEditor
-      docKey={space.id}
+      docKey={`${space.id}:${refreshKey}`}
       initialValue={content}
       filename={space.title}
       gotoLine={gotoLine}

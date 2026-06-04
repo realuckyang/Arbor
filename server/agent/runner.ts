@@ -15,7 +15,7 @@ const runTools = async (toolCalls, { signal, ctx }) => {
     try {
       const fn = functions[name];
       if (!fn) throw new Error(`unknown tool: ${name}`);
-      content = await fn(args, ctx);
+      content = await fn(args, { ...ctx, signal });
     } catch (error) {
       if (error?.name === "AbortError") throw error;
       content = `tool error: ${error.message}`;

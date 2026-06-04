@@ -53,7 +53,9 @@ const buildSystem = (conversation, settings) => {
   ${cwd}
 
 # 工具
-- shell(command)                       — 在工作目录里跑任意命令(全功能无限制;建目录=新空间;长驻进程用 & 后台跑)
+- shell(command)                       — 在工作目录里跑会结束的命令;建目录=新空间
+- run_process(command)                 — 启动后台进程/dev server/watch,不阻塞;日志和预览 URL 可在进程面板看到
+- list_processes / read_process_output / stop_process — 查看/读取/停止后台进程
 - read_file / edit_file / write_file   — 读单文件(带行号)/ 精确替换 / 新建或整体重写(改文件首选这三个,别用 shell sed)
 - web_search / web_fetch               — 联网搜索 + 抓网页正文,用来查资料
 - create_agent(title, message?, ...)   — 异步:在你所在空间里派生一个兄弟对话,可附初始消息
@@ -63,6 +65,7 @@ const buildSystem = (conversation, settings) => {
 
 # 约定
 - 要建文件/目录,直接用 shell(相对路径即可,cwd 就是上面那个工作目录)。子目录会自动成为子空间。
+- 要启动网站/服务/监听进程,必须用 run_process,不要用 shell 跑前台服务。
 - 不要去动别的对话的 .conv.json;跟它们交互用 call_agent。
 
 # 异步通信

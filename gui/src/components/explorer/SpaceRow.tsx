@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Space } from "../api";
-import { api } from "../api";
+import type { Space } from "../../api";
+import { api } from "../../api";
 import { ChevronRight, Folder, FileText, Bot, FileCode, FileJson, Image, Hash, FileType } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Space, Message } from "../api";
-import { api } from "../api";
+import type { Space, Message } from "../../api";
+import { api } from "../../api";
 import { Send, Square, Bot, PhoneCall, Sparkles, Settings } from "lucide-react";
-import { renderMarkdown } from "../lib/markdown";
+import { renderMarkdown } from "../../lib/markdown";
 import { ToolBlock, type ToolPair } from "./ToolBlock";
 
 export function ChatPanel({
@@ -119,26 +119,18 @@ export function ChatPanel({
         </div>
       </div>
 
-      {/* 未配置模型:引导横幅 */}
-      {!configured && (
-        <div className="shrink-0 px-4 md:px-6 pt-4">
-          <div className="flex items-center gap-2.5 rounded-lg border border-warning/40 bg-warning/5 px-3.5 py-2.5">
-            <Settings size={15} className="text-warning shrink-0" />
-            <span className="flex-1 text-[13px] text-text leading-snug">
-              还没配置模型,无法对话 —— 先填一下 API URL / Key / Model。
-            </span>
-            <button
-              onClick={() => onOpenSettings?.()}
-              className="shrink-0 px-2.5 py-1 rounded bg-accent text-white text-[12.5px] hover:opacity-90 transition-opacity"
-            >
-              去设置
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* 输入框 — 固定底部(四边等距内边距) */}
       <div className="p-4 md:p-6 border-t border-border bg-bg">
+        {/* 未配置模型:贴着输入框上方的一行轻提示(不再是独立描边卡片) */}
+        {!configured && (
+          <div className="flex items-center gap-1.5 mb-2 text-[12.5px] text-warning">
+            <Settings size={13} className="shrink-0" />
+            <span className="flex-1 min-w-0 truncate">还没配置模型,无法对话。</span>
+            <button onClick={() => onOpenSettings?.()} className="shrink-0 font-medium hover:underline">
+              去设置 →
+            </button>
+          </div>
+        )}
         <div className="flex items-end gap-2 rounded-lg border border-border bg-white px-3 py-2 focus-within:border-accent transition-colors">
           <textarea
             ref={inputRef}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { Settings } from "../api";
-import { api } from "../api";
+import type { Settings } from "../../api";
+import { api } from "../../api";
 import { ArrowLeft, Check, Menu } from "lucide-react";
 
 export function SettingsPanel({ onClose, onOpenNav }: { onClose: () => void; onOpenNav?: () => void }) {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, type Space } from "../api";
-import { iconFor, colorFor } from "./SpaceRow";
-import { fuzzy } from "../lib/fuzzy";
+import { api, type Space } from "../../api";
+import { iconFor, colorFor } from "../explorer/SpaceRow";
+import { fuzzy } from "../../lib/fuzzy";
 
 // 快速打开(⌘P):模糊搜索整棵树,回车打开
 export function QuickOpen({

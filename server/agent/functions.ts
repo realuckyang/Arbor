@@ -9,6 +9,7 @@
 import { exec } from "child_process";
 import { existsSync, readFileSync, writeFileSync, statSync, mkdirSync } from "fs";
 import { resolve, isAbsolute, dirname } from "path";
+import { getProcess, listProcesses, looksLongRunning, startProcess, stopProcess } from "../processes.js";
 
 const resolvePath = (p, ctx) => {
   const rel = String(p || "");
@@ -16,7 +17,7 @@ const resolvePath = (p, ctx) => {
   return isAbsolute(rel) ? rel : resolve(ctx?.cwd || process.cwd(), rel);
 };
 
-// ─── shell:全功能,无超时 / 无输出上限 ───
+// ─── shell:跑会结束的命令;常见 dev server 会自动转后台 ───
 const SHELL_CANDIDATES = [process.env.SHELL, "/bin/zsh", "/bin/bash", "/bin/sh"];
 const resolveShell = () => {
   for (const s of SHELL_CANDIDATES) {
@@ -25,24 +26,85 @@ const resolveShell = () => {
   }
   return undefined;
 };
+const SHELL_TIMEOUT_MS = Math.max(5000, Number(process.env.ARBOR_SHELL_TIMEOUT_MS) || 120_000);
 
-const shell = ({ command }, ctx) =>
+const formatProcess = (p, prefix = "started background process") => {
+  if (!p) return "process not found";
+  const lines = [
+    `${prefix}: id=${p.id}${p.pid ? ` pid=${p.pid}` : ""} status=${p.status}`,
+    `command: ${p.command}`,
+  ];
+  if (p.preview_url) lines.push(`preview: ${p.preview_url}`);
+  if (p.output) lines.push(`\nlatest output:\n${p.output.slice(-4000)}`);
+  return lines.join("\n");
+};
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const shell = ({ command, reason }, ctx) =>
   new Promise((resolve) => {
-    // 不限超时(shell 全功能);maxBuffer 只是 exec 的临时内存上限(不是 token),
-    // 8MB 足够命令跑完;真正给 LLM 的内容由 truncateToolResult 截到 ~32k。长驻进程请自行 & 后台运行。
-    const options = { maxBuffer: 1024 * 1024 * 8 };
+    const cmd = String(command || "").trim();
+    if (!cmd) { resolve("error: command 不能为空"); return; }
+
+    // 模型常忘记把 dev server 放后台。常见长驻命令直接转交给进程管理器,
+    // 让对话立即继续,日志和预览 URL 通过 process panel/工具查看。
+    if (looksLongRunning(cmd)) {
+      const proc = startProcess({ command: cmd, cwd: ctx?.cwd, reason });
+      wait(1200).then(() => resolve(formatProcess(getProcess(proc.id), "detected long-running command; started background process")));
+      return;
+    }
+
+    // maxBuffer 只是 exec 的临时内存上限;真正给 LLM 的内容由 truncateToolResult 截到 ~32k。
+    const options = { maxBuffer: 1024 * 1024 * 8, timeout: SHELL_TIMEOUT_MS, killSignal: "SIGTERM" };
     const shellPath = resolveShell();
     if (shellPath) options.shell = shellPath;
     if (ctx?.cwd && existsSync(ctx.cwd)) options.cwd = ctx.cwd;
-    exec(String(command || ""), options, (error, stdout, stderr) => {
+    if (ctx?.signal) options.signal = ctx.signal;
+    exec(cmd, options, (error, stdout, stderr) => {
       ctx?.emit?.({ type: "tree_changed", reason: "shell" }); // 可能建/改了文件 → 刷新树
       if (error) {
+        if (error.name === "AbortError") {
+          resolve("aborted");
+          return;
+        }
+        if (error.killed || /timed out/i.test(error.message || "")) {
+          resolve(`exit code ${error.code ?? 1}\ncommand exceeded ${Math.round(SHELL_TIMEOUT_MS / 1000)}s and was stopped. Use run_process for dev servers or other long-running commands.\n${stderr || error.message}`);
+          return;
+        }
         resolve(`exit code ${error.code ?? 1}\n${stderr || error.message}`);
         return;
       }
       resolve(stdout || stderr || "(no output)");
     });
   });
+
+// ─── run_process:显式启动后台进程(dev server 等)───
+const run_process = async ({ command, reason }, ctx) => {
+  const proc = startProcess({ command, cwd: ctx?.cwd, reason });
+  await wait(1200);
+  return formatProcess(getProcess(proc.id));
+};
+
+const list_processes = () => {
+  const rows = listProcesses();
+  if (!rows.length) return "(no background processes)";
+  return rows
+    .map((p) => [
+      `${p.id}  ${p.status}${p.pid ? `  pid=${p.pid}` : ""}`,
+      `  command: ${p.command}`,
+      p.preview_url ? `  preview: ${p.preview_url}` : "",
+      p.output ? `  tail: ${p.output.slice(-500).replace(/\n/g, "\n        ")}` : "",
+    ].filter(Boolean).join("\n"))
+    .join("\n\n");
+};
+
+const read_process_output = ({ process_id, tail }) => {
+  const p = getProcess(process_id, { tail: Math.min(Number(tail) || 8000, 40_000) });
+  if (!p) return `process not found: ${process_id}`;
+  return formatProcess(p, "process");
+};
+
+const stop_process = ({ process_id }) => formatProcess(stopProcess(process_id), "stop requested for process");
 
 // ─── read_file:有界读,带行号 ───
 const read_file = ({ path: p, offset, limit }, ctx) => {
@@ -205,4 +267,17 @@ const call_agent = ({ agent_id, message }, ctx) => {
   return `dispatched to "${target.title}" (id=${targetId}). reply will arrive in your mailbox as a new message.`;
 };
 
-export { shell, read_file, edit_file, write_file, web_search, web_fetch, create_agent, call_agent };
+export {
+  shell,
+  run_process,
+  list_processes,
+  read_process_output,
+  stop_process,
+  read_file,
+  edit_file,
+  write_file,
+  web_search,
+  web_fetch,
+  create_agent,
+  call_agent,
+};

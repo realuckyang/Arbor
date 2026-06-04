@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Space } from "../api";
-import { api } from "../api";
+import type { Space } from "../../api";
+import { api } from "../../api";
 import { SpaceRow, InlineCreateRow, iconFor, colorFor, type TreeControls, type DropPosition } from "./SpaceRow";
-import { ContextMenu, type MenuItem } from "./ContextMenu";
-import { Settings, Folder, FileText, Bot, Trash2, Pencil, Plus, X, Copy } from "lucide-react";
+import { ContextMenu, type MenuItem } from "../ui";
+import { Settings, Folder, FileText, Bot, Trash2, Pencil, Plus, X, Copy, PanelRight } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
@@ -23,6 +23,7 @@ const ROOT_ID = "__root__";
 export function SpaceTree({
   selectedId,
   onSelect,
+  onOpenSide,
   refreshKey,
   showSettings,
   onToggleSettings,
@@ -32,6 +33,7 @@ export function SpaceTree({
 }: {
   selectedId: string;
   onSelect: (n: Space | null) => void;
+  onOpenSide?: (n: Space) => void;
   refreshKey: number;
   showSettings: boolean;
   onToggleSettings: () => void;
@@ -240,7 +242,6 @@ export function SpaceTree({
   const onNodeContext = (e: React.MouseEvent, space: Space) => {
     e.preventDefault();
     e.stopPropagation();
-    onSelect(space); // 选中但不关移动端侧栏(handleSelect 会关,菜单就跟着没了)
     const items: MenuItem[] = [];
     if (space.kind === "space") {
       items.push(
@@ -257,6 +258,12 @@ export function SpaceTree({
     // 对话:复制稳定 uuid(给 call_agent 用);空间/文件:复制相对 workspaces 的干净路径
     const isConv = space.kind === "conversation";
     const copyText = isConv ? space.id : space.id.replace(/^.*\/workspaces\//, "");
+    if (space.kind !== "space" && onOpenSide) {
+      items.push(
+        { label: "打开到侧边", icon: <PanelRight size={13} />, onClick: () => onOpenSide(space) },
+        "divider",
+      );
+    }
     items.push(
       { label: "重命名", icon: <Pencil size={13} />, onClick: () => startRename(space) },
       { label: isConv ? "复制 ID" : "复制路径", icon: <Copy size={13} />,

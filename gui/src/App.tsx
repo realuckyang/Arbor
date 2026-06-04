@@ -1,15 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useSocket } from "./ws";
 import { api, type Space } from "./api";
-import { SpaceTree } from "./components/SpaceTree";
-import { TabBar } from "./components/TabBar";
-import { ChatPanel } from "./components/ChatPanel";
-import { FilePanel } from "./components/FilePanel";
-import { SettingsPanel } from "./components/SettingsPanel";
-import { QuickOpen } from "./components/QuickOpen";
-import { CommandPalette, type Command } from "./components/CommandPalette";
-import { SearchPanel } from "./components/SearchPanel";
-import { Menu, FileText, Folder, Bot, Search, Settings as SettingsIcon, X } from "lucide-react";
+import { QuickOpen, CommandPalette, SearchPanel, type Command } from "./components/command";
+import { SpaceTree } from "./components/explorer";
+import { SettingsPanel } from "./components/settings";
+import { WorkspaceLayout, isSpaceTab, useTabGroups } from "./components/workspace";
+import { FileText, Folder, Bot, Search, Settings as SettingsIcon, X, MonitorPlay, PanelRight } from "lucide-react";
+import type { ManagedProcess } from "./api";
 
 export function App() {
   const socket = useSocket();
@@ -20,59 +17,36 @@ export function App() {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [pendingGoto, setPendingGoto] = useState<{ id: string; line: number } | null>(null);
-
-  // ── 多标签 ──
-  const [tabs, setTabs] = useState<Space[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [previewId, setPreviewId] = useState<string | null>(null); // 至多一个预览标签(斜体)
-  const tabsRef = useRef<Space[]>([]);
-  const activeRef = useRef<string | null>(null);
-  tabsRef.current = tabs;
-  activeRef.current = activeId;
-  const active = tabs.find((t) => t.id === activeId) || null;
-
-  // 文件未保存草稿(切标签不丢)+ 脏标记
+  const [fileRefreshKeys, setFileRefreshKeys] = useState<Record<string, number>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
-  const onFileChange = (id: string, val: string) => {
-    setDrafts((d) => ({ ...d, [id]: val }));
-    setDirtyIds((s) => (s.has(id) ? s : new Set(s).add(id)));
-    setPreviewId((p) => (p === id ? null : p)); // 一旦编辑就固定标签
-  };
+
   const onFileSaved = (id: string) => {
     setDirtyIds((s) => { const n = new Set(s); n.delete(id); return n; });
     setDrafts((d) => { const n = { ...d }; delete n[id]; return n; });
   };
 
-  // ── 打开 / 激活 ──
-  // 空间(容器)不开标签,只在树里展开;对话 / 文件才进标签。
-  const openNode = (n: Space | null, opts: { preview?: boolean } = {}) => {
-    setShowSettings(false);
-    if (!n) { setActiveId(null); return; }
-    if (n.kind === "space") return;
-    const preview = !!opts.preview && n.kind === "file";
-    const existing = tabs.find((t) => t.id === n.id);
-    if (existing) {
-      setTabs(tabs.map((t) => (t.id === n.id ? n : t)));
-      if (!opts.preview && previewId === n.id) setPreviewId(null);
-    } else if (preview) {
-      setTabs([...tabs.filter((t) => t.id !== previewId), n]);
-      setPreviewId(n.id);
-    } else {
-      setTabs([...tabs, n]);
-    }
-    setActiveId(n.id);
+  const tabGroups = useTabGroups({
+    canCloseTab: (tab) => tab.kind !== "file" || !dirtyIds.has(tab.id) || confirm("有未保存的修改,确定关闭?"),
+    onTabClosed: (tab) => { if (tab.kind === "file") onFileSaved(tab.id); },
+  });
+
+  // 文件未保存草稿(切标签不丢)+ 脏标记
+  const onFileChange = (id: string, val: string) => {
+    setDrafts((d) => ({ ...d, [id]: val }));
+    setDirtyIds((s) => (s.has(id) ? s : new Set(s).add(id)));
+    tabGroups.pinPreviewTab(id);
   };
 
-  const closeTab = (id: string) => {
-    const idx = tabs.findIndex((t) => t.id === id);
-    if (idx === -1) return;
-    if (dirtyIds.has(id) && !confirm("有未保存的修改,确定关闭?")) return;
-    const next = tabs.filter((t) => t.id !== id);
-    setTabs(next);
-    onFileSaved(id);
-    if (previewId === id) setPreviewId(null);
-    if (activeId === id) setActiveId(next.length ? (next[idx] ?? next[idx - 1]).id : null);
+  const allTabsRef = useRef(tabGroups.allTabs);
+  const dirtyRef = useRef<Set<string>>(new Set());
+  const autoOpenedProcessesRef = useRef<Set<string>>(new Set());
+  allTabsRef.current = tabGroups.allTabs;
+  dirtyRef.current = dirtyIds;
+  const activeSpace = tabGroups.activeSpace;
+  const openNode = (n: Space | null, opts: { preview?: boolean; side?: boolean; groupId?: "main" | "side" } = {}) => {
+    setShowSettings(false);
+    tabGroups.openNode(n, opts);
   };
 
   // 树相关 WS 事件 → 刷新树/状态点(节流,流式时 message 事件很密)
@@ -90,33 +64,64 @@ export function App() {
   // 标签与 WS 联动:重命名/删除时同步标签
   useEffect(() => {
     const off = socket.on("tree_changed", (p: any) => {
+      setFileRefreshKeys((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const t of allTabsRef.current) {
+          if (!isSpaceTab(t)) continue;
+          if (t.kind !== "file" || dirtyRef.current.has(t.id)) continue;
+          next[t.id] = (next[t.id] || 0) + 1;
+          changed = true;
+        }
+        return changed ? next : prev;
+      });
       if (p?.item) {
-        setTabs((prev) => prev.map((t) => (t.id === p.item.id ? { ...t, ...p.item } : t)));
+        tabGroups.updateSpaceTab(p.item.id, p.item);
       } else if (p?.reason === "deleted" && p?.id) {
-        const prev = tabsRef.current;
-        if (!prev.some((t) => t.id === p.id)) return;
-        const idx = prev.findIndex((t) => t.id === p.id);
-        const next = prev.filter((t) => t.id !== p.id);
-        setTabs(next);
-        if (activeRef.current === p.id) setActiveId(next.length ? (next[idx] ?? next[idx - 1]).id : null);
+        tabGroups.removeSpaceTab(p.id);
       }
     });
     return off;
-  }, [socket]);
+  }, [socket, tabGroups.removeSpaceTab, tabGroups.updateSpaceTab]);
+
+  // 后台进程:用于预览面板入口和自动打开第一条可预览服务
+  useEffect(() => {
+    let cancelled = false;
+    api.listProcesses()
+      .then((r) => {
+        if (cancelled) return;
+        const proc = (r.processes || []).find((p) => p.status === "running" && p.preview_url);
+        if (proc && !autoOpenedProcessesRef.current.has(proc.id)) {
+          autoOpenedProcessesRef.current.add(proc.id);
+          tabGroups.openProcess({ groupId: "side" });
+        }
+      })
+      .catch(() => {});
+    const off = socket.on("process_changed", (payload: any) => {
+      const proc = payload?.process as ManagedProcess | undefined;
+      if (!proc?.id) return;
+      if (proc.status === "running" && proc.preview_url && !autoOpenedProcessesRef.current.has(proc.id)) {
+        autoOpenedProcessesRef.current.add(proc.id);
+        tabGroups.openProcess({ groupId: "side" });
+      }
+    });
+    return () => { cancelled = true; off(); };
+  }, [socket, tabGroups.openProcess]);
 
   // 刷新打开的对话标签的状态点(运行中/未读)
   useEffect(() => {
-    const convTabs = tabsRef.current.filter((t) => t.kind === "conversation");
+    const convTabs = allTabsRef.current.filter((t) => isSpaceTab(t) && t.kind === "conversation");
     if (!convTabs.length) return;
     let cancelled = false;
     Promise.all(convTabs.map((t) => api.getSpace(t.id).then((r) => r.space).catch(() => null)))
       .then((items) => {
         if (cancelled) return;
-        const map = new Map(items.filter(Boolean).map((n: any) => [n.id, n]));
-        setTabs((prev) => prev.map((t) => (map.has(t.id) ? { ...t, ...map.get(t.id) } : t)));
+        for (const item of items) {
+          if (item) tabGroups.updateSpaceTab(item.id, item);
+        }
       });
     return () => { cancelled = true; };
-  }, [treeRefresh]);
+  }, [treeRefresh, tabGroups.updateSpaceTab]);
 
   // 全局快捷键:⌘P 快开 / ⌘⇧P 命令面板 / ⌘⇧F 搜索
   useEffect(() => {
@@ -160,9 +165,27 @@ export function App() {
     { id: "new-file", label: "新建文件", icon: <FileText size={14} />, run: () => createAtRoot("file") },
     { id: "quick-open", label: "快速打开…", hint: "⌘P", icon: <Search size={14} />, run: () => setQuickOpen(true) },
     { id: "search", label: "在所有文件中搜索…", hint: "⌘⇧F", icon: <Search size={14} />, run: () => setSearchOpen(true) },
+    { id: "preview", label: "打开预览", icon: <MonitorPlay size={14} />, run: () => tabGroups.openProcess({ groupId: "side" }) },
+    {
+      id: "move-tab-side",
+      label: "移动当前标签到另一侧",
+      icon: <PanelRight size={14} />,
+      run: () => {
+        const id = tabGroups.activeGroup.activeId;
+        if (id) tabGroups.moveTab(tabGroups.activeGroupId, id);
+      },
+    },
     { id: "settings", label: "打开设置", icon: <SettingsIcon size={14} />, run: () => setShowSettings(true) },
-    { id: "close-tab", label: "关闭当前标签", icon: <X size={14} />, run: () => { if (activeId) closeTab(activeId); } },
-    { id: "close-all", label: "关闭所有标签", icon: <X size={14} />, run: () => { setTabs([]); setActiveId(null); } },
+    {
+      id: "close-tab",
+      label: "关闭当前标签",
+      icon: <X size={14} />,
+      run: () => {
+        const id = tabGroups.activeGroup.activeId;
+        if (id) tabGroups.closeTab(tabGroups.activeGroupId, id);
+      },
+    },
+    { id: "close-all", label: "关闭所有标签", icon: <X size={14} />, run: () => tabGroups.closeAll() },
   ];
 
   const openNav = () => setMobileNavOpen(true);
@@ -171,8 +194,9 @@ export function App() {
   return (
     <div className="h-screen flex overflow-hidden bg-bg text-text font-sans relative">
       <SpaceTree
-        selectedId={activeId || ""}
+        selectedId={activeSpace?.id || ""}
         onSelect={openNode}
+        onOpenSide={(n) => openNode(n, { groupId: "side" })}
         refreshKey={treeRefresh}
         showSettings={showSettings}
         onToggleSettings={() => setShowSettings((v) => !v)}
@@ -190,61 +214,36 @@ export function App() {
         <div className="md:hidden fixed inset-0 bg-black/30 z-30 transition-opacity" onClick={closeNav} />
       )}
 
-      {/* 主列:标签栏 + 内容 + 状态栏 */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {!showSettings && (
-          <TabBar
-            tabs={tabs}
-            activeId={activeId}
+      <div className="flex-1 flex min-w-0 min-h-0">
+        {showSettings ? (
+          <SettingsPanel onClose={() => setShowSettings(false)} onOpenNav={openNav} />
+        ) : (
+          <WorkspaceLayout
+            groups={tabGroups.visibleGroups}
+            activeGroupId={tabGroups.activeGroupId}
+            sideOpen={tabGroups.sideOpen}
+            socket={socket}
             dirtyIds={dirtyIds}
-            previewId={previewId}
-            onActivate={(id) => openNode(tabs.find((t) => t.id === id) || null)}
-            onClose={closeTab}
-            onReorder={setTabs}
+            drafts={drafts}
+            fileRefreshKeys={fileRefreshKeys}
+            pendingGoto={pendingGoto}
+            onFocusGroup={tabGroups.focusGroup}
+            onActivateTab={tabGroups.activateTab}
+            onCloseTab={tabGroups.closeTab}
+            onReorderTabs={tabGroups.reorderTabs}
+            onMoveTabFromGroup={tabGroups.moveTab}
+            onMoveTab={tabGroups.moveTab}
+            onToggleSideGroup={tabGroups.toggleSideGroup}
+            onCloseOthers={tabGroups.closeOthers}
+            onCloseToRight={tabGroups.closeToRight}
+            onCloseGroup={tabGroups.closeGroup}
+            onFileChange={onFileChange}
+            onFileSaved={onFileSaved}
+            onSelect={openNode}
             onOpenNav={openNav}
+            onOpenSettings={() => setShowSettings(true)}
           />
         )}
-
-        <div className="flex-1 min-h-0 flex flex-col">
-          {showSettings ? (
-            <SettingsPanel onClose={() => setShowSettings(false)} onOpenNav={openNav} />
-          ) : !active ? (
-            <EmptyPanel onOpenNav={openNav} />
-          ) : active.kind === "conversation" ? (
-            <ChatPanel key={active.id} space={active} onSelect={openNode} socket={socket} onOpenNav={openNav} onOpenSettings={() => setShowSettings(true)} />
-          ) : (
-            <FilePanel
-              key={active.id}
-              space={active}
-              draft={drafts[active.id]}
-              gotoLine={pendingGoto?.id === active.id ? pendingGoto.line : undefined}
-              onChange={(v) => onFileChange(active.id, v)}
-              onSaved={() => onFileSaved(active.id)}
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function EmptyPanel({ onOpenNav }: { onOpenNav: () => void }) {
-  return (
-    <div className="flex-1 flex flex-col min-w-0 bg-bg">
-      <div className="md:hidden flex items-center px-3 py-2.5 border-b border-border bg-bg">
-        <button
-          onClick={onOpenNav}
-          className="w-7 h-7 rounded flex items-center justify-center text-text-dim hover:text-text hover:bg-bg-hover transition-colors"
-        >
-          <Menu size={16} />
-        </button>
-      </div>
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center max-w-sm px-6">
-          <div className="text-6xl mb-4">🌳</div>
-          <div className="text-[18px] font-semibold text-text mb-1.5">Arbor</div>
-          <div className="text-[14px] text-text-faint">从左侧选择或新建一个对话开始</div>
-        </div>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronRight, Terminal, Database, Zap, PhoneCall, Loader2, Check, X } from "lucide-react";
+import { ChevronRight, Terminal, Database, Zap, PhoneCall, Loader2, Check, X, Square, ListTree } from "lucide-react";
 
 type Status = "running" | "done" | "error";
 
@@ -12,6 +12,9 @@ const safeParse = (s: string) => { try { return JSON.parse(s || "{}"); } catch {
 
 const iconFor = (name: string) => {
   if (name === "shell") return Terminal;
+  if (name === "run_process") return Terminal;
+  if (name === "stop_process") return Square;
+  if (name === "list_processes" || name === "read_process_output") return ListTree;
   if (name === "sql") return Database;
   if (name === "create_agent") return Zap;
   if (name === "call_agent") return PhoneCall;
@@ -19,7 +22,8 @@ const iconFor = (name: string) => {
 };
 
 const colorFor = (name: string) => {
-  if (name === "shell") return "text-success";
+  if (name === "shell" || name === "run_process") return "text-success";
+  if (name === "stop_process") return "text-danger";
   if (name === "sql") return "text-accent";
   if (name === "create_agent" || name === "call_agent") return "text-warning";
   return "text-text-faint";
@@ -31,7 +35,8 @@ const summarize = (name: string, args: any) => {
   if (name === "create_agent") return String(args.title || "");
   if (name === "call_agent") return `→ ${String(args.agent_id || "").slice(0, 8)} : ${String(args.message || "").slice(0, 50)}`;
   if (name === "sql") return String(args.query || "").split("\n")[0].slice(0, 100);
-  if (name === "shell") return String(args.command || "").split("\n")[0].slice(0, 100);
+  if (name === "shell" || name === "run_process") return String(args.command || "").split("\n")[0].slice(0, 100);
+  if (name === "stop_process" || name === "read_process_output") return String(args.process_id || "");
   return "";
 };
 

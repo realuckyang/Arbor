@@ -49,6 +49,22 @@ export type Settings = {
   system: string;
 };
 
+export type ManagedProcess = {
+  id: string;
+  command: string;
+  cwd: string;
+  reason: string;
+  pid: number | null;
+  status: "running" | "exited" | "error" | "stopped";
+  started_at: string;
+  ended_at: string | null;
+  exit_code: number | null;
+  signal: string | null;
+  ports: number[];
+  preview_url: string | null;
+  output: string;
+};
+
 const request = async <T>(path: string, opts: RequestInit = {}) => {
   const res = await fetch(path, opts);
   const data = await res.json().catch(() => ({}));
@@ -104,4 +120,10 @@ export const api = {
   getSettings: () => request<{ settings: Settings }>("/api/settings"),
   saveSettings: (s: Settings) =>
     request<{ settings: Settings }>("/api/settings", { method: "POST", ...jsonBody(s) }),
+
+  listProcesses: () => request<{ processes: ManagedProcess[] }>("/api/processes"),
+  getProcess: (id: string) =>
+    request<{ process: ManagedProcess }>(`/api/processes/get?id=${encodeURIComponent(id)}`),
+  stopProcess: (id: string) =>
+    request<{ process: ManagedProcess }>(`/api/processes/stop?id=${encodeURIComponent(id)}`, { method: "POST" }),
 };

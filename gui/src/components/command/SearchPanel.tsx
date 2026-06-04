@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, type SearchResult } from "../api";
+import { api, type SearchResult } from "../../api";
 import { FileText, Search } from "lucide-react";
 
 // 全局内容搜索(⌘⇧F):grep 工作区文件,点击命中跳转到行

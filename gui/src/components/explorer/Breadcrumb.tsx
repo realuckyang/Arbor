@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { Space } from "../api";
-import { api } from "../api";
+import type { Space } from "../../api";
+import { api } from "../../api";
 import { Folder, Bot, FileText, Menu } from "lucide-react";
 
 const iconFor = (kind: Space["kind"]) =>

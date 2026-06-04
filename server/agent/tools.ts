@@ -1,5 +1,5 @@
 // @ts-nocheck
-// agent 工具集(8 个)。每个都带 reason 字段当摘要,UI 默认折叠只显示 reason,点开看完整参数+结果。
+// agent 工具集。每个都带 reason 字段当摘要,UI 默认折叠只显示 reason,点开看完整参数+结果。
 
 const tools = [
   {
@@ -7,8 +7,8 @@ const tools = [
     function: {
       name: "shell",
       description:
-        "在你的工作目录(你所在的空间目录)里执行任意 shell 命令并返回输出 —— 全功能、无限制。" +
-        "git/build/ls/grep、跑脚本/服务都用它;长驻进程(如 dev server)请用 & 后台运行,否则会阻塞。" +
+        "在你的工作目录(你所在的空间目录)里执行会结束的 shell 命令并返回输出。" +
+        "git/build/ls/grep/安装依赖等用它;长驻进程/dev server 请用 run_process,不要用 shell。" +
         "读写单个文件优先用 read_file/edit_file/write_file(更省 token)。reason 是一句话摘要。",
       parameters: {
         type: "object",
@@ -17,6 +17,68 @@ const tools = [
           command: { type: "string", description: "要执行的命令" },
         },
         required: ["reason", "command"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "run_process",
+      description:
+        "启动一个后台进程,用于 dev server、静态文件服务、watcher 等长驻命令。它会立即返回进程 id、日志片段和可能的 preview URL;不会阻塞对话。" +
+        "例如 npm run dev、python -m http.server、vite、next dev 都用它。reason 是一句话摘要。",
+      parameters: {
+        type: "object",
+        properties: {
+          reason:  { type: "string", description: "为什么启动这个进程(一句话摘要,UI 会显示)" },
+          command: { type: "string", description: "要启动的命令" },
+        },
+        required: ["reason", "command"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_processes",
+      description: "列出当前 Arbor 后台进程,包括状态、命令、日志片段和 preview URL。reason 是一句话摘要。",
+      parameters: {
+        type: "object",
+        properties: {
+          reason: { type: "string", description: "为什么查看进程(一句话摘要)" },
+        },
+        required: ["reason"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_process_output",
+      description: "读取某个后台进程的最新日志输出。用于检查 dev server 是否启动成功、端口是多少、有没有报错。reason 是一句话摘要。",
+      parameters: {
+        type: "object",
+        properties: {
+          reason:     { type: "string", description: "为什么读取日志(一句话摘要)" },
+          process_id: { type: "string", description: "run_process 返回的进程 id" },
+          tail:       { type: "number", description: "可选:最多返回多少字符(默认 8000,上限 40000)" },
+        },
+        required: ["reason", "process_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "stop_process",
+      description: "停止一个后台进程。用于关闭 dev server、watcher 等。reason 是一句话摘要。",
+      parameters: {
+        type: "object",
+        properties: {
+          reason:     { type: "string", description: "为什么停止(一句话摘要)" },
+          process_id: { type: "string", description: "要停止的进程 id" },
+        },
+        required: ["reason", "process_id"],
       },
     },
   },

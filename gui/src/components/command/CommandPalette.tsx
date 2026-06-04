@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fuzzy } from "../lib/fuzzy";
+import { fuzzy } from "../../lib/fuzzy";
 
 export type Command = {
   id: string;
