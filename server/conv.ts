@@ -9,8 +9,7 @@
 // agent/ 内核完全不知道 spaces/conversations/files/messages/calls 表,所有状态在这里管。
 
 import { chat } from "./agent/index.js";
-import { getConversation, createConversation } from "./repo/conversations.js";
-import { ancestry } from "./repo/tree.js";
+import { getConversation, createConversation, ancestry, conversationDir } from "./repo/tree.js";
 import { appendMessage, historyFor } from "./repo/messages.js";
 import {
   createCall,
@@ -22,10 +21,10 @@ import { getSettings } from "./repo/settings.js";
 import { getDb } from "./db.js";
 import { emit } from "./bus.js";
 
-// 一个对话所在的空间 id(create_agent 据此把新对话建在同一空间)
+// 一个对话所在的空间 id(create_agent 据此把新对话建在同一空间)= 它的父空间路径
 const spaceIdOf = (conversationId) => {
   const c = getConversation(conversationId);
-  return c?.space_id || null;
+  return c?.parent_id || null;
 };
 
 // ── 对话级运行注册 ──
@@ -42,53 +41,33 @@ const stopConversation = (conversationId) => {
 const buildSystem = (conversation, settings) => {
   const base = (conversation.system && conversation.system.trim()) || settings.system || "";
   const path = ancestry(conversation.id).map((n) => n.title).join(" / ");
-  const spaceId = conversation.space_id;
-  const spaceClause = spaceId ? `= '${spaceId}'` : "IS NULL";
-  const insertSpace = spaceId ? `'${spaceId}'` : "NULL";
+  const cwd = conversationDir(conversation.id);
 
   return `${base}
 
-# Identity
+# 你是谁
+- 你是一个对话(conversation),活在一棵「空间树」里。空间 = 目录,文件 = 真实文件,对话 = <uuid>.conv.json。
 - conversation id: ${conversation.id}
-- path:            ${path}
-- space_id:        ${spaceId || "(root)"}
+- 路径:           ${path}
+- 你的工作目录(你的 shell 就在这里执行,东西都建在这里):
+  ${cwd}
 
-# Tools you have
-- shell(command, reason)              — run any shell command
-- sql(query)                          — read/write any of spaces / conversations / files / messages / calls
-- create_agent(title, message?, ...)  — async: create a sibling conversation in your space, optionally dispatch initial msg
-- call_agent(conversation_id, message)— async: send message to an existing conversation
+# 工具
+- shell(command)                       — 在工作目录里跑任意命令(全功能无限制;建目录=新空间;长驻进程用 & 后台跑)
+- read_file / edit_file / write_file   — 读单文件(带行号)/ 精确替换 / 新建或整体重写(改文件首选这三个,别用 shell sed)
+- web_search / web_fetch               — 联网搜索 + 抓网页正文,用来查资料
+- create_agent(title, message?, ...)   — 异步:在你所在空间里派生一个兄弟对话,可附初始消息
+- call_agent(conversation_id, message) — 异步:给已存在的对话发消息
 
-# DB schema
-spaces(id PK, parent_id TEXT→spaces.id, title, position, created_at)              -- 纯分组容器,无限自嵌套
-conversations(id PK, space_id TEXT→spaces.id, title, system, last_read_at, ...)   -- 活的 agent,住在某个空间里
-files(id PK, space_id TEXT→spaces.id, title, content, ...)                        -- 静态内容
-messages(id, conversation_id TEXT→conversations.id, body, meta, created_at)       -- body 是整条消息 JSON
-calls(id, caller_id, callee_id, request_msg_id, response_msg_id, status, ...)     -- status in {pending,running,done,error,cancelled}
+文件类工具的相对路径都相对你上面那个工作目录。
 
-# Common SQL templates
--- 列出你所在空间里的东西
-SELECT id, title FROM spaces        WHERE parent_id ${spaceClause} ORDER BY title;
-SELECT id, title FROM conversations WHERE space_id  ${spaceClause} ORDER BY title;
-SELECT id, title FROM files         WHERE space_id  ${spaceClause} ORDER BY title;
+# 约定
+- 要建文件/目录,直接用 shell(相对路径即可,cwd 就是上面那个工作目录)。子目录会自动成为子空间。
+- 不要去动别的对话的 .conv.json;跟它们交互用 call_agent。
 
--- 在你所在空间里建一个子空间(分组)
-INSERT INTO spaces (id, parent_id, title)
-VALUES (lower(hex(randomblob(16))), ${insertSpace}, 'drafts');
-
--- 在你所在空间里建一个文件
-INSERT INTO files (id, space_id, title, content)
-VALUES (lower(hex(randomblob(16))), ${insertSpace}, 'notes.md', '...content...');
-
--- 读 / 改 / 删一个文件
-SELECT content FROM files WHERE id = '...';
-UPDATE files SET content = '...' WHERE id = '...';
-DELETE FROM files WHERE id = '...';
-
-# Async messaging
-When you use call_agent or create_agent(with message), the tool returns immediately.
-The other conversation runs in the background. Its final reply will arrive as a NEW message in your mailbox
-with meta.source = 'call_result', prefixed [CALL_RESULT ...]. You'll be re-invoked then.
+# 异步通信
+call_agent / create_agent(带 message)立即返回。对方在后台跑完后,它的最终回复会作为一条新消息
+进入你的邮箱(meta.source='call_result',前缀 [CALL_RESULT ...]),你会被自动再次唤醒。
 `;
 };
 
@@ -126,6 +105,7 @@ const runConversation = async (conversationId, { signal: extSignal, callerId = n
   // 注入到 agent 内核的工具实现的"外部能力"
   const ctx = {
     selfConversationId: conversationId,
+    cwd: conversationDir(conversationId), // agent 的 shell 工作目录
     db: getDb(),
     emit,
     createConversation,
