@@ -23,7 +23,7 @@ const tools = [
     function: {
       name: "sql",
       description:
-        "直接执行 SQLite 语句,对 nodes / messages / calls 表读写。" +
+        "直接执行 SQLite 语句,对 spaces / conversations / files / messages / calls 表读写。" +
         "SELECT/WITH/PRAGMA 返回 JSON 行;其它返回 changes/lastInsertRowid。一次只能执行一条语句。" +
         "reason 字段是一句话描述目的,UI 会当摘要显示。",
       parameters: {
@@ -41,7 +41,7 @@ const tools = [
     function: {
       name: "create_agent",
       description:
-        "在你所在的文件夹下创建一个新 agent 节点。如果提供 message,会同时往新 agent 派发该初始消息(异步,不阻塞)。" +
+        "在你所在的空间下创建一个新对话(agent)。如果提供 message,会同时往它派发该初始消息(异步,不阻塞)。" +
         "对方跑完后,它的最终回复会自动作为新消息投进你的邮箱。" +
         "reason 字段是一句话描述目的,UI 会当摘要显示。",
       parameters: {
@@ -67,7 +67,7 @@ const tools = [
         type: "object",
         properties: {
           reason:   { type: "string", description: "为什么要调它(一句话摘要)" },
-          agent_id: { type: "string", description: "目标 agent 的 node id" },
+          agent_id: { type: "string", description: "目标对话(conversation)的 id" },
           message:  { type: "string", description: "要发送的消息" },
         },
         required: ["reason", "agent_id", "message"],

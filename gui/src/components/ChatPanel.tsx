@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Node, Message } from "../api";
+import type { Space, Message } from "../api";
 import { api } from "../api";
 import { Send, Square, Bot, PhoneCall, Sparkles } from "lucide-react";
 import { Breadcrumb } from "./Breadcrumb";
@@ -7,13 +7,13 @@ import { renderMarkdown } from "../lib/markdown";
 import { ToolBlock, type ToolPair } from "./ToolBlock";
 
 export function ChatPanel({
-  node,
+  space,
   onSelect,
   socket,
   onOpenNav,
 }: {
-  node: Node;
-  onSelect: (n: Node) => void;
+  space: Space;
+  onSelect: (n: Space) => void;
   socket: { send: (m: any) => void; on: (t: string, fn: (p: any) => void) => () => void };
   onOpenNav?: () => void;
 }) {
@@ -26,47 +26,47 @@ export function ChatPanel({
   const composingRef = useRef(false); // 中文 IME 组词中
 
   const loadMessages = useCallback(async () => {
-    const result = await api.listMessages(node.id);
+    const result = await api.listMessages(space.id);
     setMessages(result.messages || []);
-  }, [node.id]);
+  }, [space.id]);
 
   // 切到这个 agent → 立即 mark-read
   useEffect(() => {
     setMessages([]);
     setStreaming("");
     loadMessages();
-    api.markNodeRead(node.id).catch(() => {});
-  }, [node.id, loadMessages]);
+    api.markSpaceRead(space.id).catch(() => {});
+  }, [space.id, loadMessages]);
 
   useEffect(() => {
-    socket.send({ type: "subscribe", nodeId: node.id });
+    socket.send({ type: "subscribe", spaceId: space.id });
     const offDelta = socket.on("delta", (p: any) => {
-      if (p.nodeId !== node.id) return;
+      if (p.spaceId !== space.id) return;
       if (p.content) setStreaming((prev) => prev + p.content);
     });
     const offMsg = socket.on("message", (p: any) => {
-      if (p.nodeId !== node.id) return;
+      if (p.spaceId !== space.id) return;
       setStreaming("");                                     // 完整消息到了,清空流式 buffer
       setMessages((prev) => [...prev, p.message]);
-      api.markNodeRead(node.id).catch(() => {});
+      api.markSpaceRead(space.id).catch(() => {});
     });
     const offEnd = socket.on("end", (p: any) => {
-      if (p.nodeId !== node.id) return;
+      if (p.spaceId !== space.id) return;
       setSending(false);
       setStreaming("");
       loadMessages();
-      api.markNodeRead(node.id).catch(() => {});
+      api.markSpaceRead(space.id).catch(() => {});
     });
     const offErr = socket.on("error", (p: any) => {
-      if (p.nodeId !== node.id) return;
+      if (p.spaceId !== space.id) return;
       setSending(false);
       setStreaming("");
     });
     return () => {
       offDelta(); offMsg(); offEnd(); offErr();
-      socket.send({ type: "unsubscribe", nodeId: node.id });
+      socket.send({ type: "unsubscribe", spaceId: space.id });
     };
-  }, [node.id, socket, loadMessages]);
+  }, [space.id, socket, loadMessages]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -84,22 +84,22 @@ export function ChatPanel({
     if (!text || sending) return;
     setSending(true);
     setPrompt("");
-    socket.send({ type: "send", nodeId: node.id, prompt: text });
+    socket.send({ type: "send", spaceId: space.id, prompt: text });
   };
 
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-bg">
       {/* 顶栏:面包屑+汉堡 — 固定,保持导航始终可用 */}
-      <Breadcrumb nodeId={node.id} onJump={onSelect} onOpenNav={onOpenNav} />
+      <Breadcrumb spaceId={space.id} onJump={onSelect} onOpenNav={onOpenNav} />
 
       {/* 滚动区:文档头 + 消息一起自然滚动 */}
       <div className="flex-1 overflow-y-auto">
         {/* 文档头 */}
         <div className="px-4 md:px-12 pt-8 md:pt-12 pb-6">
           <div className="text-4xl mb-2">🤖</div>
-          <h1 className="text-[28px] md:text-[36px] font-bold text-text leading-tight">{node.title}</h1>
-          {node.system && (
-            <p className="mt-2 text-[14px] text-text-faint leading-relaxed">{node.system.slice(0, 200)}</p>
+          <h1 className="text-[28px] md:text-[36px] font-bold text-text leading-tight">{space.title}</h1>
+          {space.system && (
+            <p className="mt-2 text-[14px] text-text-faint leading-relaxed">{space.system.slice(0, 200)}</p>
           )}
         </div>
 
@@ -151,7 +151,7 @@ export function ChatPanel({
           />
           {sending ? (
             <button
-              onClick={() => socket.send({ type: "stop", nodeId: node.id })}
+              onClick={() => socket.send({ type: "stop", spaceId: space.id })}
               className="w-8 h-8 rounded flex items-center justify-center text-text-faint hover:text-danger hover:bg-bg-hover transition-colors shrink-0"
             >
               <Square size={14} />

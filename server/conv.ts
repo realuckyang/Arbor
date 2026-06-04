@@ -1,19 +1,16 @@
 // @ts-nocheck
 // server 的对话编排器:
-//   - 加载 history、拼 system prompt (注入位置 + DB schema)
+//   - 加载 history、拼 system prompt(注入位置 + DB schema)
 //   - 调 agent.chat
 //   - 持久化产生的消息
 //   - 管理 calls 表(开始/结束/错误)
 //   - 异步回信给 caller 并唤醒它
 //
-// agent/ 内核完全不知道 nodes/messages/calls 表,所有状态在这里管。
+// agent/ 内核完全不知道 spaces/conversations/files/messages/calls 表,所有状态在这里管。
 
 import { chat } from "./agent/index.js";
-import {
-  getNode,
-  createNode,
-  ancestry,
-} from "./repo/nodes.js";
+import { getConversation, createConversation } from "./repo/conversations.js";
+import { ancestry } from "./repo/tree.js";
 import { appendMessage, historyFor } from "./repo/messages.js";
 import {
   createCall,
@@ -25,84 +22,82 @@ import { getSettings } from "./repo/settings.js";
 import { getDb } from "./db.js";
 import { emit } from "./bus.js";
 
-const parentIdOf = (id) => {
-  const n = getNode(id);
-  return n?.parent_id || null;
+// 一个对话所在的空间 id(create_agent 据此把新对话建在同一空间)
+const spaceIdOf = (conversationId) => {
+  const c = getConversation(conversationId);
+  return c?.space_id || null;
 };
 
-// ── 节点级运行注册 ──
-// 每次 runConversation 注册自己的 AbortController,stop 对任意 nodeId 都生效
+// ── 对话级运行注册 ──
+// 每次 runConversation 注册自己的 AbortController,stop 对任意 conversationId 都生效
 const running = new Map();
 
-const isRunning = (nodeId) => running.has(String(nodeId));
+const isRunning = (conversationId) => running.has(String(conversationId));
 
-const stopConversation = (nodeId) => {
-  const ctrl = running.get(String(nodeId));
+const stopConversation = (conversationId) => {
+  const ctrl = running.get(String(conversationId));
   if (ctrl) ctrl.abort();
 };
 
-const buildSystem = (node, settings) => {
-  const base = (node.system && node.system.trim()) || settings.system || "";
-  const path = ancestry(node.id).map((n) => n.title).join(" / ");
-  const parentId = node.parent_id;
-  const parentClause = parentId ? `= '${parentId}'` : "IS NULL";
-  const insertParent = parentId ? `'${parentId}'` : "NULL";
+const buildSystem = (conversation, settings) => {
+  const base = (conversation.system && conversation.system.trim()) || settings.system || "";
+  const path = ancestry(conversation.id).map((n) => n.title).join(" / ");
+  const spaceId = conversation.space_id;
+  const spaceClause = spaceId ? `= '${spaceId}'` : "IS NULL";
+  const insertSpace = spaceId ? `'${spaceId}'` : "NULL";
 
   return `${base}
 
 # Identity
-- node id: ${node.id}
-- path:    ${path}
-- parent_folder_id: ${parentId || "(root)"}
+- conversation id: ${conversation.id}
+- path:            ${path}
+- space_id:        ${spaceId || "(root)"}
 
 # Tools you have
 - shell(command, reason)              — run any shell command
-- sql(query)                          — read/write any of nodes / messages / calls
-- create_agent(title, message?, ...)  — async: create a sibling agent, optionally dispatch initial msg
-- call_agent(agent_id, message)       — async: send message to an existing agent
+- sql(query)                          — read/write any of spaces / conversations / files / messages / calls
+- create_agent(title, message?, ...)  — async: create a sibling conversation in your space, optionally dispatch initial msg
+- call_agent(conversation_id, message)— async: send message to an existing conversation
 
 # DB schema
-nodes(id TEXT PK, parent_id TEXT, kind TEXT in {'folder','file','agent'}, title TEXT, system TEXT, content TEXT, created_at)
-messages(id, node_id TEXT, body TEXT, meta TEXT, created_at)   -- body is full message JSON
-calls(id, caller_id, callee_id, request_msg_id, response_msg_id, status, result, error, created_at, completed_at)
-  status in {'pending','running','done','error','cancelled'}
+spaces(id PK, parent_id TEXT→spaces.id, title, position, created_at)              -- 纯分组容器,无限自嵌套
+conversations(id PK, space_id TEXT→spaces.id, title, system, last_read_at, ...)   -- 活的 agent,住在某个空间里
+files(id PK, space_id TEXT→spaces.id, title, content, ...)                        -- 静态内容
+messages(id, conversation_id TEXT→conversations.id, body, meta, created_at)       -- body 是整条消息 JSON
+calls(id, caller_id, callee_id, request_msg_id, response_msg_id, status, ...)     -- status in {pending,running,done,error,cancelled}
 
 # Common SQL templates
--- list nodes in your current folder
-SELECT id, kind, title FROM nodes WHERE parent_id ${parentClause} ORDER BY kind, title;
+-- 列出你所在空间里的东西
+SELECT id, title FROM spaces        WHERE parent_id ${spaceClause} ORDER BY title;
+SELECT id, title FROM conversations WHERE space_id  ${spaceClause} ORDER BY title;
+SELECT id, title FROM files         WHERE space_id  ${spaceClause} ORDER BY title;
 
--- create a file next to you
-INSERT INTO nodes (id, parent_id, kind, title, content)
-VALUES (lower(hex(randomblob(16))), ${insertParent}, 'file', 'notes.md', '...content...');
+-- 在你所在空间里建一个子空间(分组)
+INSERT INTO spaces (id, parent_id, title)
+VALUES (lower(hex(randomblob(16))), ${insertSpace}, 'drafts');
 
--- create a folder next to you
-INSERT INTO nodes (id, parent_id, kind, title)
-VALUES (lower(hex(randomblob(16))), ${insertParent}, 'folder', 'drafts');
+-- 在你所在空间里建一个文件
+INSERT INTO files (id, space_id, title, content)
+VALUES (lower(hex(randomblob(16))), ${insertSpace}, 'notes.md', '...content...');
 
--- read a file by id
-SELECT content FROM nodes WHERE id = '...';
-
--- rename / edit content
-UPDATE nodes SET title = '新名'  WHERE id = '...';
-UPDATE nodes SET content = '...' WHERE id = '...';
-
--- delete (folder cascades)
-DELETE FROM nodes WHERE id = '...';
+-- 读 / 改 / 删一个文件
+SELECT content FROM files WHERE id = '...';
+UPDATE files SET content = '...' WHERE id = '...';
+DELETE FROM files WHERE id = '...';
 
 # Async messaging
 When you use call_agent or create_agent(with message), the tool returns immediately.
-The other agent runs in the background. Its final reply will arrive as a NEW message in your mailbox
+The other conversation runs in the background. Its final reply will arrive as a NEW message in your mailbox
 with meta.source = 'call_result', prefixed [CALL_RESULT ...]. You'll be re-invoked then.
 `;
 };
 
-const runConversation = async (nodeId, { signal: extSignal, callerId = null } = {}) => {
-  const node = getNode(nodeId);
-  if (!node) throw new Error(`node not found: ${nodeId}`);
-  if (node.kind !== "agent") throw new Error(`node ${nodeId} is not an agent`);
+const runConversation = async (conversationId, { signal: extSignal, callerId = null } = {}) => {
+  const conversation = getConversation(conversationId);
+  if (!conversation) throw new Error(`conversation not found: ${conversationId}`);
 
-  // 节点级互斥
-  if (running.has(String(nodeId))) {
+  // 对话级互斥
+  if (running.has(String(conversationId))) {
     throw new Error("already running");
   }
 
@@ -113,30 +108,30 @@ const runConversation = async (nodeId, { signal: extSignal, callerId = null } = 
 
   // 建本次的 controller,注册进 running;桥接外部 signal(如果有)
   const controller = new AbortController();
-  running.set(String(nodeId), controller);
+  running.set(String(conversationId), controller);
   if (extSignal) {
     if (extSignal.aborted) controller.abort();
     else extSignal.addEventListener("abort", () => controller.abort(), { once: true });
   }
   const signal = controller.signal;
 
-  const callId = createCall({ callerId, calleeId: nodeId });
+  const callId = createCall({ callerId, calleeId: conversationId });
   markCallRunning(callId);
-  emit({ type: "call_changed", callId, calleeId: nodeId });
+  emit({ type: "call_changed", callId, calleeId: conversationId });
 
-  const system = buildSystem(node, settings);
-  const history = historyFor(nodeId);
+  const system = buildSystem(conversation, settings);
+  const history = historyFor(conversationId);
   const messages = [{ role: "system", content: system }, ...history];
 
   // 注入到 agent 内核的工具实现的"外部能力"
   const ctx = {
-    selfNodeId: nodeId,
+    selfConversationId: conversationId,
     db: getDb(),
     emit,
-    createNode,
+    createConversation,
     appendMessage,
-    getNode,
-    parentIdOf,
+    getConversation,
+    spaceIdOf,
     runConversation, // 让 create_agent / call_agent 能唤醒别的对话
   };
 
@@ -150,8 +145,7 @@ const runConversation = async (nodeId, { signal: extSignal, callerId = null } = 
       ctx,
       onEvent: (event) => {
         if (event.type === "delta") {
-          // 流式 token,直接广播,不落库(完整消息会在 done 时一次性 append)
-          emit({ type: "delta", nodeId, content: event.content || "", reasoning: event.reasoning || "" });
+          emit({ type: "delta", conversationId, content: event.content || "", reasoning: event.reasoning || "" });
           return;
         }
         if (
@@ -159,32 +153,30 @@ const runConversation = async (nodeId, { signal: extSignal, callerId = null } = 
           event.type === "tool_result" ||
           event.type === "done"
         ) {
-          appendMessage(nodeId, event.message);
-          emit({ type: "message", nodeId, message: event.message });
+          appendMessage(conversationId, event.message);
+          emit({ type: "message", conversationId, message: event.message });
           return;
         }
         if (event.type === "usage") {
-          emit({ type: "usage", nodeId, usage: event.usage });
+          emit({ type: "usage", conversationId, usage: event.usage });
         }
       },
     });
 
     markCallDone(callId, { result: result.text });
-    emit({ type: "call_changed", callId, calleeId: nodeId });
+    emit({ type: "call_changed", callId, calleeId: conversationId });
 
-    // 异步回信给 caller(如果是 agent-to-agent)
+    // 异步回信给 caller(如果是对话间调用)
     if (callerId) {
-      const caller = getNode(callerId);
-      if (caller && caller.kind === "agent") {
+      const caller = getConversation(callerId);
+      if (caller) {
         const replyMsg = {
           role: "user",
-          content: `[CALL_RESULT from "${node.title}" (call#${callId})]\n${result.text}`,
+          content: `[CALL_RESULT from "${conversation.title}" (call#${callId})]\n${result.text}`,
         };
-        const meta = { source: "call_result", from: nodeId, call_id: callId };
+        const meta = { source: "call_result", from: conversationId, call_id: callId };
         appendMessage(callerId, replyMsg, meta);
-        emit({ type: "message", nodeId: callerId, message: { ...replyMsg, _meta: meta } });
-        // 唤醒 caller(非阻塞)
-        // caller 可能正在跑(它派完我们就立即继续了),忽略 already running 这种良性错误
+        emit({ type: "message", conversationId: callerId, message: { ...replyMsg, _meta: meta } });
         runConversation(callerId, {}).catch((e) => {
           if (!/already running/i.test(e?.message || "")) {
             console.error("[wake caller] failed:", e?.message);
@@ -197,10 +189,10 @@ const runConversation = async (nodeId, { signal: extSignal, callerId = null } = 
   } catch (error) {
     const isAbort = error?.name === "AbortError";
     markCallError(callId, isAbort ? "aborted" : (error?.message || "unknown error"));
-    emit({ type: "call_changed", callId, calleeId: nodeId });
+    emit({ type: "call_changed", callId, calleeId: conversationId });
     throw error;
   } finally {
-    running.delete(String(nodeId));
+    running.delete(String(conversationId));
   }
 };
 

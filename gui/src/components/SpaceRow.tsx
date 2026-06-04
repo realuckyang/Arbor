@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Node } from "../api";
+import type { Space } from "../api";
 import { api } from "../api";
 import { ChevronRight, Folder, FileText, Bot } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
@@ -12,7 +12,7 @@ export type TreeControls = {
   setExpanded: (id: string, on: boolean) => void;
   // 创建
   creatingUnder: string | null;
-  creatingKind: Node["kind"];
+  creatingKind: Space["kind"];
   draftTitle: string;
   setDraftTitle: (s: string) => void;
   commitCreate: () => void;
@@ -23,19 +23,19 @@ export type TreeControls = {
   setRenameDraft: (s: string) => void;
   commitRename: () => void;
   cancelRename: () => void;
-  // dnd-kit:外部告诉 TreeNode 当前哪个 nodeId 被 hover 以及 drop 位置
+  // dnd-kit:外部告诉 SpaceRow 当前哪个 spaceId 被 hover 以及 drop 位置
   activeId: string | null;
   overNodeId: string | null;
   dropPos: DropPosition | null;
 };
 
-const iconFor = (kind: Node["kind"]) =>
+const iconFor = (kind: Space["kind"]) =>
   kind === "folder" ? Folder : kind === "agent" ? Bot : FileText;
-const colorFor = (kind: Node["kind"]) =>
+const colorFor = (kind: Space["kind"]) =>
   kind === "folder" ? "text-accent" : kind === "agent" ? "text-warning" : "text-text-faint";
 
-export function TreeNode({
-  node,
+export function SpaceRow({
+  space,
   selectedId,
   onSelect,
   onContextMenu,
@@ -43,57 +43,57 @@ export function TreeNode({
   controls,
   depth = 0,
 }: {
-  node: Node;
+  space: Space;
   selectedId: string;
-  onSelect: (n: Node) => void;
-  onContextMenu: (e: React.MouseEvent, n: Node) => void;
+  onSelect: (n: Space) => void;
+  onContextMenu: (e: React.MouseEvent, n: Space) => void;
   refreshKey: number;
   controls: TreeControls;
   depth?: number;
 }) {
-  const [children, setChildren] = useState<Node[]>([]);
+  const [children, setChildren] = useState<Space[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  const isContainer = node.kind === "folder";
-  const expanded = controls.expandedIds.has(node.id);
-  const isRenaming = controls.renamingId === node.id;
-  const isDragging = controls.activeId === node.id;
+  const isContainer = space.kind === "folder";
+  const expanded = controls.expandedIds.has(space.id);
+  const isRenaming = controls.renamingId === space.id;
+  const isDragging = controls.activeId === space.id;
 
   // dnd-kit
   const {
     attributes,
     listeners,
     setNodeRef: setDragRef,
-  } = useDraggable({ id: node.id, data: { node }, disabled: isRenaming });
-  const { setNodeRef: setDropRef } = useDroppable({ id: node.id, data: { node } });
+  } = useDraggable({ id: space.id, data: { space }, disabled: isRenaming });
+  const { setNodeRef: setDropRef } = useDroppable({ id: space.id, data: { space } });
   const setRef = useCallback(
     (el: HTMLDivElement | null) => { setDragRef(el); setDropRef(el); },
     [setDragRef, setDropRef],
   );
 
-  const isOver = controls.overNodeId === node.id;
+  const isOver = controls.overNodeId === space.id;
   const dropPos = isOver ? controls.dropPos : null;
 
   const loadChildren = useCallback(async () => {
     if (!isContainer) return;
-    const result = await api.listChildren(node.id);
-    setChildren(result.nodes || []);
+    const result = await api.listChildren(space.id);
+    setChildren(result.spaces || []);
     setLoaded(true);
-  }, [node.id, isContainer]);
+  }, [space.id, isContainer]);
 
   useEffect(() => { if (expanded && !loaded) loadChildren(); }, [expanded, loaded, loadChildren]);
   useEffect(() => { if (loaded || expanded) loadChildren(); }, [refreshKey]);
 
   const toggle = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isContainer) controls.toggleExpand(node.id);
+    if (isContainer) controls.toggleExpand(space.id);
   };
 
-  const isSelected = selectedId === node.id;
-  const Icon = iconFor(node.kind);
-  const iconColor = colorFor(node.kind);
+  const isSelected = selectedId === space.id;
+  const Icon = iconFor(space.kind);
+  const iconColor = colorFor(space.kind);
 
-  const showInputHere = isContainer && controls.creatingUnder === node.id;
+  const showInputHere = isContainer && controls.creatingUnder === space.id;
 
   return (
     <div>
@@ -111,8 +111,8 @@ export function TreeNode({
         ref={setRef}
         {...attributes}
         {...listeners}
-        onClick={() => !isRenaming && onSelect(node)}
-        onContextMenu={(e) => onContextMenu(e, node)}
+        onClick={() => !isRenaming && onSelect(space)}
+        onContextMenu={(e) => onContextMenu(e, space)}
         className={[
           "group relative flex items-center gap-1.5 py-[3px] pr-2 rounded cursor-pointer select-none text-text touch-none",
           isSelected && !isRenaming ? "bg-bg-inset" : "hover:bg-bg-hover",
@@ -149,10 +149,10 @@ export function TreeNode({
             className="flex-1 min-w-0 bg-white border border-accent rounded px-1 -mx-1 py-px text-[14px] text-text outline-none"
           />
         ) : (
-          <span className="flex-1 min-w-0 truncate text-[14.5px]">{node.title}</span>
+          <span className="flex-1 min-w-0 truncate text-[14.5px]">{space.title}</span>
         )}
 
-        {node.kind === "agent" && <AgentStatusDot status={node.status} unread={node.unread} />}
+        {space.kind === "agent" && <AgentStatusDot status={space.status} unread={space.unread} />}
       </div>
 
       {/* drop indicator (after) */}
@@ -169,9 +169,9 @@ export function TreeNode({
         <div>
           {showInputHere && <InlineCreateRow depth={depth + 1} controls={controls} />}
           {children.map((child) => (
-            <TreeNode
+            <SpaceRow
               key={child.id}
-              node={child}
+              space={child}
               selectedId={selectedId}
               onSelect={onSelect}
               onContextMenu={onContextMenu}

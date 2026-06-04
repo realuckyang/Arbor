@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSocket } from "./ws";
-import type { Node } from "./api";
-import { NodeTree } from "./components/NodeTree";
+import type { Space } from "./api";
+import { SpaceTree } from "./components/SpaceTree";
 import { ChatPanel } from "./components/ChatPanel";
 import { FilePanel } from "./components/FilePanel";
 import { FolderPanel } from "./components/FolderPanel";
@@ -10,26 +10,26 @@ import { Menu } from "lucide-react";
 
 export function App() {
   const socket = useSocket();
-  const [selected, setSelected] = useState<Node | null>(null);
+  const [selected, setSelected] = useState<Space | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [treeRefresh, setTreeRefresh] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
-    const triggers = ["node_created", "node_changed", "node_deleted", "call_changed", "message"];
+    const triggers = ["space_created", "space_changed", "space_deleted", "call_changed", "message"];
     const offs = triggers.map((t) => socket.on(t, () => setTreeRefresh((n) => n + 1)));
     return () => offs.forEach((f) => f());
   }, [socket]);
 
   useEffect(() => {
     if (!selected) return;
-    const off = socket.on("node_changed", (p: any) => {
-      if (p?.node?.id === selected.id) setSelected(p.node);
+    const off = socket.on("space_changed", (p: any) => {
+      if (p?.space?.id === selected.id) setSelected(p.space);
     });
     return off;
   }, [selected, socket]);
 
-  const select = (n: Node | null) => {
+  const select = (n: Space | null) => {
     setSelected(n);
     setShowSettings(false);
   };
@@ -39,7 +39,7 @@ export function App() {
 
   return (
     <div className="h-screen flex overflow-hidden bg-bg text-text font-sans relative">
-      <NodeTree
+      <SpaceTree
         selectedId={selected?.id || ""}
         onSelect={select}
         refreshKey={treeRefresh}
@@ -62,11 +62,11 @@ export function App() {
       ) : !selected ? (
         <EmptyPanel onOpenNav={openNav} />
       ) : selected.kind === "agent" ? (
-        <ChatPanel node={selected} onSelect={select} socket={socket} onOpenNav={openNav} />
+        <ChatPanel space={selected} onSelect={select} socket={socket} onOpenNav={openNav} />
       ) : selected.kind === "file" ? (
-        <FilePanel node={selected} onSelect={select} onOpenNav={openNav} />
+        <FilePanel space={selected} onSelect={select} onOpenNav={openNav} />
       ) : (
-        <FolderPanel node={selected} onSelect={select} refreshKey={treeRefresh} onOpenNav={openNav} />
+        <FolderPanel space={selected} onSelect={select} refreshKey={treeRefresh} onOpenNav={openNav} />
       )}
     </div>
   );

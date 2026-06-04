@@ -1,81 +1,91 @@
 // @ts-nocheck
+// 对话:活的 agent,住在某个空间里(叶子)。消息流在 messages,通信在 calls。
 import { randomUUID } from "crypto";
 import { getDb } from "../db.js";
-
-const createConversation = ({ parentId = null, title = "", system = null } = {}) => {
-  const id = randomUUID();
-  getDb()
-    .prepare("INSERT INTO conversations (id, parent_id, title, system) VALUES (?, ?, ?, ?)")
-    .run(id, parentId, String(title || "未命名"), system);
-  return getConversation(id);
-};
+import { nextPos, getSpace } from "./spaces.js";
 
 const getConversation = (id) =>
   getDb().prepare("SELECT * FROM conversations WHERE id = ?").get(String(id)) || null;
 
-// 直接孩子;parentId 为 null/空 → 取根节点
-const listConversations = (parentId) => {
+const listConversationsInSpace = (spaceId) => {
   const db = getDb();
-  if (parentId === undefined) {
-    return db.prepare("SELECT * FROM conversations ORDER BY created_at ASC").all();
-  }
-  if (!parentId) {
-    return db.prepare("SELECT * FROM conversations WHERE parent_id IS NULL ORDER BY created_at ASC").all();
-  }
-  return db
-    .prepare("SELECT * FROM conversations WHERE parent_id = ? ORDER BY created_at ASC")
-    .all(String(parentId));
+  const order = "ORDER BY position ASC, title COLLATE NOCASE ASC";
+  return spaceId
+    ? db.prepare(`SELECT * FROM conversations WHERE space_id = ? ${order}`).all(String(spaceId))
+    : db.prepare(`SELECT * FROM conversations WHERE space_id IS NULL ${order}`).all();
 };
 
-const countChildren = (id) =>
-  Number(
-    getDb().prepare("SELECT COUNT(*) AS n FROM conversations WHERE parent_id = ?").get(String(id))?.n,
-  ) || 0;
-
-const setStatus = (id, status, { result = undefined, error = undefined } = {}) => {
-  const db = getDb();
-  db.prepare("UPDATE conversations SET status = ? WHERE id = ?").run(String(status), String(id));
-  if (result !== undefined) {
-    db.prepare("UPDATE conversations SET result = ? WHERE id = ?").run(result, String(id));
-  }
-  if (error !== undefined) {
-    db.prepare("UPDATE conversations SET error = ? WHERE id = ?").run(error, String(id));
-  }
+const createConversation = ({ spaceId = null, title, system = null } = {}) => {
+  if (spaceId && !getSpace(spaceId)) throw new Error(`space not found: ${spaceId}`);
+  const id = randomUUID();
+  getDb()
+    .prepare("INSERT INTO conversations (id, space_id, title, system, position) VALUES (?, ?, ?, ?, ?)")
+    .run(id, spaceId || null, String(title || "").trim() || "新对话", system ? String(system) : null,
+      nextPos("conversations", "space_id", spaceId));
+  return getConversation(id);
 };
 
-const updateTitle = (id, title) => {
+const updateConversationTitle = (id, title) => {
   getDb().prepare("UPDATE conversations SET title = ? WHERE id = ?").run(String(title), String(id));
   return getConversation(id);
 };
 
+const updateConversationSystem = (id, system) => {
+  getDb().prepare("UPDATE conversations SET system = ? WHERE id = ?").run(system == null ? null : String(system), String(id));
+  return getConversation(id);
+};
+
 const deleteConversation = (id) => {
+  // messages / calls 通过 FK ON DELETE CASCADE 连带清掉
   getDb().prepare("DELETE FROM conversations WHERE id = ?").run(String(id));
 };
 
-// 沿 parent 链取祖先(含自己),从根到当前 —— 面包屑用
-const ancestry = (id) => {
-  const chain = [];
-  let current = getConversation(id);
-  const seen = new Set();
-  while (current && !seen.has(current.id)) {
-    seen.add(current.id);
-    chain.unshift(current);
-    current = current.parent_id ? getConversation(current.parent_id) : null;
-  }
-  return chain;
+const moveConversation = (id, newSpaceId, position = undefined) => {
+  if (!getConversation(id)) throw new Error(`conversation not found: ${id}`);
+  const target = newSpaceId ? String(newSpaceId) : null;
+  if (target && !getSpace(target)) throw new Error(`target space not found: ${target}`);
+  const pos =
+    position != null && Number.isFinite(Number(position)) ? Number(position) : nextPos("conversations", "space_id", target);
+  getDb().prepare("UPDATE conversations SET space_id = ?, position = ? WHERE id = ?").run(target, pos, String(id));
+  return getConversation(id);
 };
 
-// 当前节点到根的深度(根 = 0)—— 递归护栏用
-const depthOf = (id) => Math.max(0, ancestry(id).length - 1);
+// 标记已读 = last_read_at 设为现在
+const markRead = (id) => {
+  getDb().prepare("UPDATE conversations SET last_read_at = datetime('now') WHERE id = ?").run(String(id));
+  return getConversation(id);
+};
+
+// 给一组对话 id,返回 {id -> unread}(有比 last_read_at 更新的消息)
+const unreadMap = (ids) => {
+  if (!ids?.length) return {};
+  const db = getDb();
+  const placeholders = ids.map(() => "?").join(",");
+  const rows = db
+    .prepare(
+      `SELECT c.id AS id,
+              EXISTS(
+                SELECT 1 FROM messages m
+                WHERE m.conversation_id = c.id
+                  AND (c.last_read_at IS NULL OR m.created_at > c.last_read_at)
+              ) AS unread
+         FROM conversations c
+        WHERE c.id IN (${placeholders})`,
+    )
+    .all(...ids.map(String));
+  const map = {};
+  for (const r of rows) map[r.id] = !!r.unread;
+  return map;
+};
 
 export {
-  createConversation,
   getConversation,
-  listConversations,
-  countChildren,
-  setStatus,
-  updateTitle,
+  listConversationsInSpace,
+  createConversation,
+  updateConversationTitle,
+  updateConversationSystem,
   deleteConversation,
-  ancestry,
-  depthOf,
+  moveConversation,
+  markRead,
+  unreadMap,
 };

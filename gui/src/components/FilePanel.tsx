@@ -1,30 +1,30 @@
 import { useEffect, useState } from "react";
-import type { Node } from "../api";
+import type { Space } from "../api";
 import { api } from "../api";
 import { Save, Check } from "lucide-react";
 import { Breadcrumb } from "./Breadcrumb";
 import { TiptapEditor } from "./TiptapEditor";
 
 export function FilePanel({
-  node,
+  space,
   onSelect,
   onOpenNav,
 }: {
-  node: Node;
-  onSelect: (n: Node) => void;
+  space: Space;
+  onSelect: (n: Space) => void;
   onOpenNav?: () => void;
 }) {
-  const [draft, setDraft] = useState(node.content || "");
+  const [draft, setDraft] = useState(space.content || "");
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
-    setDraft(node.content || "");
+    setDraft(space.content || "");
     setDirty(false);
-  }, [node.id, node.content]);
+  }, [space.id, space.content]);
 
   const save = async () => {
-    await api.updateNode(node.id, { content: draft });
+    await api.updateNode(space.id, { content: draft });
     setSaved(true);
     setDirty(false);
     setTimeout(() => setSaved(false), 1500);
@@ -32,14 +32,14 @@ export function FilePanel({
 
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-bg">
-      <Breadcrumb nodeId={node.id} onJump={onSelect} onOpenNav={onOpenNav} />
+      <Breadcrumb spaceId={space.id} onJump={onSelect} onOpenNav={onOpenNav} />
 
       {/* 整个内容区一起自然滚动 */}
       <div className="flex-1 overflow-y-auto flex flex-col">
         {/* 文档头 */}
         <div className="px-4 md:px-12 pt-8 md:pt-12 pb-3">
           <div className="text-4xl mb-2">📄</div>
-          <h1 className="text-[28px] md:text-[36px] font-bold text-text leading-tight">{node.title}</h1>
+          <h1 className="text-[28px] md:text-[36px] font-bold text-text leading-tight">{space.title}</h1>
         </div>
 
         {/* 工具栏 */}

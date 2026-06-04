@@ -1,4 +1,4 @@
-export type Node = {
+export type Space = {
   id: string;
   parent_id: string | null;
   kind: "folder" | "file" | "agent";
@@ -51,40 +51,40 @@ const request = async <T>(path: string, opts: RequestInit = {}) => {
 export const api = {
   health: () => request<{ ok: boolean }>("/health"),
 
-  listRoots: () => request<{ nodes: Node[] }>("/api/nodes?parentId="),
+  listRoots: () => request<{ spaces: Space[] }>("/api/spaces?parentId="),
   listChildren: (parentId: string) =>
-    request<{ nodes: Node[] }>(`/api/nodes?parentId=${encodeURIComponent(parentId)}`),
-  getNode: (id: string) =>
-    request<{ node: Node }>(`/api/nodes/get?id=${encodeURIComponent(id)}`),
-  createNode: (opts: { kind: Node["kind"]; title: string; parentId?: string; system?: string; content?: string }) =>
-    request<{ node: Node }>("/api/nodes", {
+    request<{ spaces: Space[] }>(`/api/spaces?parentId=${encodeURIComponent(parentId)}`),
+  getSpace: (id: string) =>
+    request<{ space: Space }>(`/api/spaces/get?id=${encodeURIComponent(id)}`),
+  createSpace: (opts: { kind: Space["kind"]; title: string; parentId?: string; system?: string; content?: string }) =>
+    request<{ space: Space }>("/api/spaces", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(opts),
     }),
   updateNode: (id: string, patch: { title?: string; content?: string; parentId?: string | null }) =>
-    request<{ node: Node }>(`/api/nodes?id=${encodeURIComponent(id)}`, {
+    request<{ space: Space }>(`/api/spaces?id=${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
     }),
-  moveNode: (id: string, newParentId: string | null, position?: number) =>
-    request<{ node: Node }>(`/api/nodes?id=${encodeURIComponent(id)}`, {
+  moveSpace: (id: string, newParentId: string | null, position?: number) =>
+    request<{ space: Space }>(`/api/spaces?id=${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ parentId: newParentId, position }),
     }),
-  markNodeRead: (id: string) =>
-    request<{ node: Node }>(`/api/nodes/read?id=${encodeURIComponent(id)}`, {
+  markSpaceRead: (id: string) =>
+    request<{ space: Space }>(`/api/spaces/read?id=${encodeURIComponent(id)}`, {
       method: "POST",
     }),
-  deleteNode: (id: string) =>
-    request<{ ok: boolean }>(`/api/nodes?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
+  deleteSpace: (id: string) =>
+    request<{ ok: boolean }>(`/api/spaces?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
   ancestry: (id: string) =>
-    request<{ ancestry: Node[] }>(`/api/ancestry?id=${encodeURIComponent(id)}`),
+    request<{ ancestry: Space[] }>(`/api/ancestry?id=${encodeURIComponent(id)}`),
 
-  listMessages: (nodeId: string) =>
-    request<{ messages: Message[] }>(`/api/messages?nodeId=${encodeURIComponent(nodeId)}`),
+  listMessages: (spaceId: string) =>
+    request<{ messages: Message[] }>(`/api/messages?spaceId=${encodeURIComponent(spaceId)}`),
 
   listCalls: (params: { callerId?: string; calleeId?: string; status?: string } = {}) => {
     const qs = new URLSearchParams();

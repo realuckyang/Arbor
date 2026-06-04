@@ -42,8 +42,8 @@ const sql = ({ query }, ctx) => {
       return JSON.stringify(rows, null, 2);
     }
     const r = db.prepare(q).run();
-    // sql 可能改了 nodes,通知 GUI 刷新树
-    ctx.emit?.({ type: "node_created", source: "sql" });
+    // sql 可能改了树,通知 GUI 刷新
+    ctx.emit?.({ type: "tree_changed", reason: "sql" });
     return `OK. changes=${r.changes}${r.lastInsertRowid ? `, lastInsertRowid=${r.lastInsertRowid}` : ""}`;
   } catch (error) {
     return `sql error: ${error.message}`;
@@ -51,44 +51,43 @@ const sql = ({ query }, ctx) => {
 };
 
 // ─── create_agent (异步) ───
+// 在自己所在的空间里创建一个兄弟对话(新 agent)。
 const create_agent = ({ title, message, system }, ctx) => {
-  const newAgent = ctx.createNode({
-    parentId: ctx.parentIdOf(ctx.selfNodeId),
-    kind: "agent",
+  const newConv = ctx.createConversation({
+    spaceId: ctx.spaceIdOf(ctx.selfConversationId),
     title: String(title || "new agent"),
     system: system ? String(system) : null,
   });
-  ctx.emit({ type: "node_created", node: newAgent });
+  ctx.emit({ type: "tree_changed", item: newConv, reason: "created" });
 
   if (message != null && String(message).trim()) {
     ctx.appendMessage(
-      newAgent.id,
+      newConv.id,
       { role: "user", content: String(message) },
-      { source: "call", from: ctx.selfNodeId },
+      { source: "call", from: ctx.selfConversationId },
     );
-    // 异步唤醒,不阻塞当前 agent
-    ctx.runConversation(newAgent.id, { callerId: ctx.selfNodeId }).catch((e) =>
+    // 异步唤醒,不阻塞当前对话
+    ctx.runConversation(newConv.id, { callerId: ctx.selfConversationId }).catch((e) =>
       console.error(`[create_agent] wake failed:`, e?.message),
     );
-    return `created agent "${newAgent.title}" (id=${newAgent.id}). initial message dispatched; reply will arrive in your mailbox.`;
+    return `created conversation "${newConv.title}" (id=${newConv.id}). initial message dispatched; reply will arrive in your mailbox.`;
   }
-  return `created agent "${newAgent.title}" (id=${newAgent.id}).`;
+  return `created conversation "${newConv.title}" (id=${newConv.id}).`;
 };
 
 // ─── call_agent (异步) ───
 const call_agent = ({ agent_id, message }, ctx) => {
   const targetId = String(agent_id || "").trim();
-  if (!targetId) return "agent_id is required";
-  const target = ctx.getNode(targetId);
-  if (!target) return `agent not found: ${targetId}`;
-  if (target.kind !== "agent") return `not an agent: kind=${target.kind}`;
+  if (!targetId) return "conversation_id is required";
+  const target = ctx.getConversation(targetId);
+  if (!target) return `conversation not found: ${targetId}`;
 
   ctx.appendMessage(
     targetId,
     { role: "user", content: String(message || "") },
-    { source: "call", from: ctx.selfNodeId },
+    { source: "call", from: ctx.selfConversationId },
   );
-  ctx.runConversation(targetId, { callerId: ctx.selfNodeId }).catch((e) =>
+  ctx.runConversation(targetId, { callerId: ctx.selfConversationId }).catch((e) =>
     console.error(`[call_agent] wake failed:`, e?.message),
   );
   return `dispatched to "${target.title}" (id=${targetId}). reply will arrive in your mailbox as a new message.`;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Node } from "../api";
+import type { Space } from "../api";
 import { api } from "../api";
-import { TreeNode, InlineCreateRow, iconFor, colorFor, type TreeControls, type DropPosition } from "./TreeNode";
+import { SpaceRow, InlineCreateRow, iconFor, colorFor, type TreeControls, type DropPosition } from "./SpaceRow";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { TreePine, Settings, Folder, FileText, Bot, Trash2, Pencil, Plus, X, Copy } from "lucide-react";
 import {
@@ -20,7 +20,7 @@ import {
 
 const ROOT_ID = "__root__";
 
-export function NodeTree({
+export function SpaceTree({
   selectedId,
   onSelect,
   refreshKey,
@@ -30,14 +30,14 @@ export function NodeTree({
   onCloseMobile,
 }: {
   selectedId: string;
-  onSelect: (n: Node | null) => void;
+  onSelect: (n: Space | null) => void;
   refreshKey: number;
   showSettings: boolean;
   onToggleSettings: () => void;
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
 }) {
-  const [roots, setRoots] = useState<Node[]>([]);
+  const [roots, setRoots] = useState<Space[]>([]);
 
   // 展开集
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -48,7 +48,7 @@ export function NodeTree({
 
   // 创建
   const [creatingUnder, setCreatingUnder] = useState<string | null>(null);
-  const [creatingKind, setCreatingKind] = useState<Node["kind"]>("folder");
+  const [creatingKind, setCreatingKind] = useState<Space["kind"]>("folder");
   const [draftTitle, setDraftTitle] = useState("");
 
   // 重命名
@@ -59,9 +59,9 @@ export function NodeTree({
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
 
   // dnd-kit 状态
-  const [activeNode, setActiveNode] = useState<Node | null>(null);
+  const [activeNode, setActiveNode] = useState<Space | null>(null);
   const activeId = activeNode?.id || null;
-  const [overInfo, setOverInfo] = useState<{ nodeId: string; pos: DropPosition; node: Node } | null>(null);
+  const [overInfo, setOverInfo] = useState<{ spaceId: string; pos: DropPosition; space: Space } | null>(null);
   const [overRoot, setOverRoot] = useState(false);
 
   // 全局跟踪指针位置(算 drop position 用)
@@ -78,7 +78,7 @@ export function NodeTree({
 
   const load = useCallback(async () => {
     const result = await api.listRoots();
-    setRoots(result.nodes || []);
+    setRoots(result.spaces || []);
   }, []);
 
   useEffect(() => { load(); }, [load, refreshKey]);
@@ -91,7 +91,7 @@ export function NodeTree({
   );
 
   // ── 创建 ──
-  const startCreate = (parentId: string | null, kind: Node["kind"]) => {
+  const startCreate = (parentId: string | null, kind: Space["kind"]) => {
     setCreatingUnder(parentId === null ? "" : parentId);
     setCreatingKind(kind);
     setDraftTitle("");
@@ -102,16 +102,16 @@ export function NodeTree({
     if (creatingUnder === null) return;
     if (!title) { setCreatingUnder(null); setDraftTitle(""); return; }
     const parentId = creatingUnder === "" ? undefined : creatingUnder;
-    const result = await api.createNode({ kind: creatingKind, title, parentId });
+    const result = await api.createSpace({ kind: creatingKind, title, parentId });
     setCreatingUnder(null);
     setDraftTitle("");
-    handleSelect(result.node);
+    handleSelect(result.space);
     load();
   };
   const cancelCreate = () => { setCreatingUnder(null); setDraftTitle(""); };
 
   // ── 重命名 ──
-  const startRename = (n: Node) => { setRenamingId(n.id); setRenameDraft(n.title); };
+  const startRename = (n: Space) => { setRenamingId(n.id); setRenameDraft(n.title); };
   const commitRename = async () => {
     const id = renamingId;
     const title = renameDraft.trim();
@@ -124,23 +124,23 @@ export function NodeTree({
 
   // ── 拖拽算法 ──
   const nextPosUnder = async (parentId: string | null) => {
-    const siblings = parentId ? (await api.listChildren(parentId)).nodes : (await api.listRoots()).nodes;
+    const siblings = parentId ? (await api.listChildren(parentId)).spaces : (await api.listRoots()).spaces;
     const max = siblings.reduce((m: number, n: any) => Math.max(m, Number(n.position) || 0), 0);
     return max + 1;
   };
 
-  const applyDrop = async (sourceId: string, target: Node, position: DropPosition) => {
+  const applyDrop = async (sourceId: string, target: Space, position: DropPosition) => {
     if (sourceId === target.id) return;
     try {
       if (position === "into") {
         if (target.kind !== "folder") return;
         const pos = await nextPosUnder(target.id);
-        await api.moveNode(sourceId, target.id, pos);
+        await api.moveSpace(sourceId, target.id, pos);
       } else {
         const parentId = target.parent_id;
         const siblingsList = parentId
-          ? (await api.listChildren(parentId)).nodes
-          : (await api.listRoots()).nodes;
+          ? (await api.listChildren(parentId)).spaces
+          : (await api.listRoots()).spaces;
         const siblings = siblingsList.filter((n: any) => n.id !== sourceId);
         const idx = siblings.findIndex((n: any) => n.id === target.id);
         const targetPos = Number(target.position) || (idx + 1);
@@ -154,7 +154,7 @@ export function NodeTree({
           const nextPos = next ? Number(next.position) || (targetPos + 1) : targetPos + 1;
           newPos = (targetPos + nextPos) / 2;
         }
-        await api.moveNode(sourceId, parentId, newPos);
+        await api.moveSpace(sourceId, parentId, newPos);
       }
       load();
     } catch (e: any) {
@@ -165,7 +165,7 @@ export function NodeTree({
   const applyDropToRoot = async (sourceId: string) => {
     try {
       const pos = await nextPosUnder(null);
-      await api.moveNode(sourceId, null, pos);
+      await api.moveSpace(sourceId, null, pos);
       load();
     } catch (e: any) {
       alert(e.message || "move failed");
@@ -174,8 +174,8 @@ export function NodeTree({
 
   // ── dnd-kit 事件 ──
   const handleDragStart = (e: DragStartEvent) => {
-    const node = (e.active.data.current as any)?.node as Node | undefined;
-    if (node) setActiveNode(node);
+    const space = (e.active.data.current as any)?.space as Space | undefined;
+    if (space) setActiveNode(space);
   };
 
   const handleDragOver = (e: DragOverEvent) => {
@@ -187,9 +187,9 @@ export function NodeTree({
       return;
     }
     setOverRoot(false);
-    const node = (over.data.current as any)?.node as Node | undefined;
-    if (!node) { setOverInfo(null); return; }
-    if (node.id === activeId) { setOverInfo(null); return; }
+    const space = (over.data.current as any)?.space as Space | undefined;
+    if (!space) { setOverInfo(null); return; }
+    if (space.id === activeId) { setOverInfo(null); return; }
     // 自己不能拖进自己的子孙(基础防环,后端兜底)
     const rect = over.rect;
     if (!rect) { setOverInfo(null); return; }
@@ -197,14 +197,14 @@ export function NodeTree({
     const rel = Math.max(0, Math.min(1, (py - rect.top) / rect.height));
 
     let pos: DropPosition;
-    if (node.kind === "folder") {
+    if (space.kind === "folder") {
       if (rel < 0.25) pos = "before";
       else if (rel > 0.75) pos = "after";
       else pos = "into";
     } else {
       pos = rel < 0.5 ? "before" : "after";
     }
-    setOverInfo({ nodeId: node.id, pos, node });
+    setOverInfo({ spaceId: space.id, pos, space });
   };
 
   const handleDragEnd = async (_e: DragEndEvent) => {
@@ -220,8 +220,8 @@ export function NodeTree({
       return;
     }
     if (info) {
-      if (info.pos === "into") setExpanded(info.node.id, true);
-      await applyDrop(src, info.node, info.pos);
+      if (info.pos === "into") setExpanded(info.space.id, true);
+      await applyDrop(src, info.space, info.pos);
     }
   };
 
@@ -232,30 +232,30 @@ export function NodeTree({
   };
 
   // ── 右键 ──
-  const onNodeContext = (e: React.MouseEvent, node: Node) => {
+  const onNodeContext = (e: React.MouseEvent, space: Space) => {
     e.preventDefault();
     e.stopPropagation();
-    handleSelect(node);
+    handleSelect(space);
     const items: MenuItem[] = [];
-    if (node.kind === "folder") {
+    if (space.kind === "folder") {
       items.push(
         { label: "新建文件夹", icon: <Folder size={13} className="text-accent" />,
-          onClick: () => startCreate(node.id, "folder") },
+          onClick: () => startCreate(space.id, "folder") },
         { label: "新建文件",   icon: <FileText size={13} className="text-text-faint" />,
-          onClick: () => startCreate(node.id, "file") },
+          onClick: () => startCreate(space.id, "file") },
         { label: "新建 Agent", icon: <Bot size={13} className="text-warning" />,
-          onClick: () => startCreate(node.id, "agent") },
+          onClick: () => startCreate(space.id, "agent") },
         "divider",
       );
     }
     items.push(
-      { label: "重命名", icon: <Pencil size={13} />, onClick: () => startRename(node) },
+      { label: "重命名", icon: <Pencil size={13} />, onClick: () => startRename(space) },
       { label: "复制 ID", icon: <Copy size={13} />,
         onClick: async () => {
-          try { await navigator.clipboard.writeText(node.id); }
+          try { await navigator.clipboard.writeText(space.id); }
           catch {
             const ta = document.createElement("textarea");
-            ta.value = node.id; document.body.appendChild(ta);
+            ta.value = space.id; document.body.appendChild(ta);
             ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
           }
         },
@@ -263,9 +263,9 @@ export function NodeTree({
       "divider",
       { label: "删除", icon: <Trash2 size={13} />, danger: true,
         onClick: async () => {
-          if (!confirm(`删除「${node.title}」?${node.kind === "folder" ? "\n里面所有内容也会一起删除。" : ""}`)) return;
-          await api.deleteNode(node.id);
-          if (selectedId === node.id) onSelect(null);
+          if (!confirm(`删除「${space.title}」?${space.kind === "folder" ? "\n里面所有内容也会一起删除。" : ""}`)) return;
+          await api.deleteSpace(space.id);
+          if (selectedId === space.id) onSelect(null);
           load();
         },
       },
@@ -288,7 +288,7 @@ export function NodeTree({
     });
   };
 
-  const handleSelect = (n: Node | null) => {
+  const handleSelect = (n: Space | null) => {
     onSelect(n);
     if (mobileOpen) onCloseMobile?.();
   };
@@ -301,7 +301,7 @@ export function NodeTree({
     expandedIds, toggleExpand, setExpanded,
     creatingUnder, creatingKind, draftTitle, setDraftTitle, commitCreate, cancelCreate,
     renamingId, renameDraft, setRenameDraft, commitRename, cancelRename,
-    activeId, overNodeId: overInfo?.nodeId || null, dropPos: overInfo?.pos || null,
+    activeId, overNodeId: overInfo?.spaceId || null, dropPos: overInfo?.pos || null,
   };
 
   return (
@@ -357,10 +357,10 @@ export function NodeTree({
         <RootDroppable highlight={overRoot} onContextMenu={onBlankContext}>
           {creatingUnder === "" && <InlineCreateRow depth={0} controls={controls} />}
 
-          {roots.map((node) => (
-            <TreeNode
-              key={node.id}
-              node={node}
+          {roots.map((space) => (
+            <SpaceRow
+              key={space.id}
+              space={space}
               selectedId={selectedId}
               onSelect={handleSelect}
               onContextMenu={onNodeContext}
@@ -401,7 +401,7 @@ export function NodeTree({
 
       {/* 拖动时跟手指/鼠标的预览 */}
       <DragOverlay dropAnimation={null}>
-        {activeNode ? <DragPreview node={activeNode} /> : null}
+        {activeNode ? <DragPreview space={activeNode} /> : null}
       </DragOverlay>
     </DndContext>
   );
@@ -428,13 +428,13 @@ function RootDroppable({
   );
 }
 
-function DragPreview({ node }: { node: Node }) {
-  const Icon = iconFor(node.kind);
-  const color = colorFor(node.kind);
+function DragPreview({ space }: { space: Space }) {
+  const Icon = iconFor(space.kind);
+  const color = colorFor(space.kind);
   return (
     <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-white border border-accent shadow-lg shadow-black/15 text-[14.5px] cursor-grabbing select-none">
       <Icon size={14} className={color} />
-      <span className="truncate max-w-48">{node.title}</span>
+      <span className="truncate max-w-48">{space.title}</span>
     </div>
   );
 }

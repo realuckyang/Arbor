@@ -30,43 +30,43 @@ const handleConnection = (ws) => {
     const type = String(payload.type || "");
 
     if (type === "subscribe") {
-      client.subs.add(String(payload.nodeId || ""));
-      sendJson(ws, { type: "subscribed", nodeId: payload.nodeId });
+      client.subs.add(String(payload.conversationId || ""));
+      sendJson(ws, { type: "subscribed", conversationId: payload.conversationId });
       return;
     }
     if (type === "unsubscribe") {
-      client.subs.delete(String(payload.nodeId || ""));
+      client.subs.delete(String(payload.conversationId || ""));
       return;
     }
     if (type === "stop") {
-      // 对任意 nodeId 都生效(包括 spawn 出来的子 agent)
-      stopConversation(String(payload.nodeId || ""));
+      // 对任意 conversationId 都生效(包括 spawn 出来的子对话)
+      stopConversation(String(payload.conversationId || ""));
       return;
     }
     if (type === "send") {
-      const nodeId = String(payload.nodeId || "");
-      if (!nodeId) {
-        sendJson(ws, { type: "error", error: "missing nodeId" });
+      const conversationId = String(payload.conversationId || "");
+      if (!conversationId) {
+        sendJson(ws, { type: "error", error: "missing conversationId" });
         return;
       }
-      client.subs.add(nodeId);
+      client.subs.add(conversationId);
 
       const prompt = String(payload.prompt || "").trim();
       if (prompt) {
         const msg = { role: "user", content: prompt };
-        appendMessage(nodeId, msg);
-        broadcastAll({ type: "message", nodeId, message: msg });
+        appendMessage(conversationId, msg);
+        broadcastAll({ type: "message", conversationId, message: msg });
       }
 
       try {
-        await runConversation(nodeId);
-        broadcastAll({ type: "end", nodeId });
+        await runConversation(conversationId);
+        broadcastAll({ type: "end", conversationId });
       } catch (error) {
         // 用户主动停止 = 一种"结束",也广播 end 让前端复位
         if (error?.name === "AbortError") {
-          broadcastAll({ type: "end", nodeId, aborted: true });
+          broadcastAll({ type: "end", conversationId, aborted: true });
         } else {
-          broadcastAll({ type: "error", nodeId, error: error.message });
+          broadcastAll({ type: "error", conversationId, error: error.message });
         }
       }
       return;
