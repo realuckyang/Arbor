@@ -2,7 +2,7 @@
 
 **一棵会自己生长的 agent 树。**
 
-每个智能体是树上的一个 agent;文件夹把智能体无限嵌套地组织起来;智能体之间可以异步互相说话;每个智能体有一块自己的真实工作目录,AI 在里面长出文件、跑命令、建项目。整个系统跑在你自己机器上,默认监听 7000 端口。
+每个智能体是树上的一个 agent;文件夹把智能体无限嵌套地组织起来;智能体之间可以异步互相说话;每个智能体有一块自己的真实工作目录,AI 在里面长出文件、跑命令、建项目。整个系统跑在你自己机器上,默认监听 9506 端口。
 
 不是另一个 agent 框架。是一个把 **「智能体 = 树上的一个节点」** 这个想法做到底的实验内核 —— 全栈一万行级别,能完全读懂。
 
@@ -120,12 +120,12 @@ cd Arbor
 npm install
 
 # 开发(两个进程)
-npm run dev          # 后端,tsx watch,端口 7000
-npm run gui          # 前端,vite dev,端口 5174(代理到 7000)
+npm run dev          # 后端,tsx watch,端口 9506
+npm run gui          # 前端,vite dev,端口 5174(代理到 9506)
 
 # 生产(构建 GUI,单端口跑全部)
 npm run build        # vite build → gui/dist
-npm start            # 后端 + GUI 同端口 http://localhost:7000
+npm start            # 后端 + GUI 同端口 http://localhost:9506
 ```
 
 打开 **http://localhost:5174/**(开发):

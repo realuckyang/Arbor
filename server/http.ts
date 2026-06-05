@@ -4,7 +4,7 @@ import { handleApi } from "./api/index.js";
 import { attachWs } from "./realtime.js";
 import { serve } from "./static.js";
 
-const startServer = async (port = 7000) =>
+const startServer = async (port = 9506) =>
   new Promise((resolve, reject) => {
     const server = http.createServer(async (req, res) => {
       const result = await handleApi(req, res);

@@ -6,7 +6,7 @@
 
 - [ ] `npm run typecheck` 通过
 - [ ] `npm run build` 通过
-- [ ] 本地启动 `npm start` 后访问 http://localhost:7000/ 验证关键路径
+- [ ] 本地启动 `npm start` 后访问 http://localhost:9506/ 验证关键路径
 - [ ] (如改了后端) 至少手测一次端到端:发条消息看流式输出 / 看 calls 表
 
 ## 涉及范围

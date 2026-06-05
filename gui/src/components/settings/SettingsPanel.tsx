@@ -12,6 +12,7 @@ const emptySettings: Settings = {
 
 const inputClass =
   "w-full border border-border bg-bg px-3 py-2 text-[13px] text-text outline-none transition-colors focus:border-accent";
+const repositoryUrl = "https://github.com/realuckyang/Arbor";
 
 export function SettingsPanel({ onSaved }: { onSaved?: (settings: Settings) => void }) {
   const [form, setForm] = useState<Settings>(emptySettings);
@@ -94,6 +95,20 @@ export function SettingsPanel({ onSaved }: { onSaved?: (settings: Settings) => v
                 value={form.system}
                 onChange={(e) => set("system", e.target.value)}
               />
+            </Field>
+
+            <Field label="关于" alignTop>
+              <div className="space-y-1.5 py-1 text-[13px] text-text-dim">
+                <div>版本 {__APP_VERSION__}</div>
+                <a
+                  href={repositoryUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex text-accent hover:underline"
+                >
+                  {repositoryUrl}
+                </a>
+              </div>
             </Field>
           </div>
         </div>

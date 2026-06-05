@@ -10,7 +10,7 @@ const buildLlmHeaders = (provider, apiUrl, apiKey) => {
     headers.Authorization = `Bearer ${apiKey}`;
   }
   if (String(apiUrl || "").includes("openrouter.ai")) {
-    headers["HTTP-Referer"] = "http://localhost:7000";
+    headers["HTTP-Referer"] = "http://localhost:9506";
     headers["X-Title"] = "arbor";
   }
   return headers;
