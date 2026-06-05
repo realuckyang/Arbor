@@ -3,8 +3,11 @@ import type { Space } from "../../api";
 import {
   isOpenableSpace,
   isSpaceTab,
+  gitDiffTab,
   processTab,
   PROCESS_TAB_ID,
+  settingsTab,
+  terminalTab,
   type WorkspaceGroupId,
   type WorkspaceGroupState,
   type WorkspaceTab,
@@ -103,6 +106,18 @@ export function useTabGroups({ canCloseTab = () => true, onTabClosed = () => {} 
 
   const openProcess = useCallback((opts: { groupId?: WorkspaceGroupId; side?: boolean } = {}) => {
     openTab(processTab(), { groupId: opts.groupId || "side", side: opts.side });
+  }, [openTab]);
+
+  const openTerminal = useCallback((cwd: string, title = "Terminal", opts: { groupId?: WorkspaceGroupId; side?: boolean; command?: string } = {}) => {
+    openTab(terminalTab(cwd, title, opts.command), opts);
+  }, [openTab]);
+
+  const openGitDiff = useCallback((root: string, filePath: string, staged = false, opts: { groupId?: WorkspaceGroupId; side?: boolean } = {}) => {
+    openTab(gitDiffTab(root, filePath, staged), opts);
+  }, [openTab]);
+
+  const openSettings = useCallback((opts: { groupId?: WorkspaceGroupId; side?: boolean } = {}) => {
+    openTab(settingsTab(), opts);
   }, [openTab]);
 
   const activateTab = useCallback((groupId: WorkspaceGroupId, id: string) => {
@@ -248,6 +263,9 @@ export function useTabGroups({ canCloseTab = () => true, onTabClosed = () => {} 
     toggleSideGroup,
     openNode,
     openProcess,
+    openTerminal,
+    openGitDiff,
+    openSettings,
     activateTab,
     reorderTabs,
     closeTabs,

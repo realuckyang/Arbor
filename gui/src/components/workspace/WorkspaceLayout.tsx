@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import type { Space } from "../../api";
+import type { Settings, Space } from "../../api";
 import { WorkspaceGroup } from "./WorkspaceGroup";
 import type { WorkspaceGroupId, WorkspaceGroupState, WorkspaceTab } from "./types";
 
@@ -56,6 +56,7 @@ export function WorkspaceLayout({
   onSelect,
   onOpenNav,
   onOpenSettings,
+  onSettingsSaved,
 }: {
   groups: WorkspaceGroupState[];
   activeGroupId: WorkspaceGroupId;
@@ -80,6 +81,7 @@ export function WorkspaceLayout({
   onSelect: (n: Space) => void;
   onOpenNav?: () => void;
   onOpenSettings: () => void;
+  onSettingsSaved?: (settings: Settings) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const splitDragRef = useRef<SplitDragSession | null>(null);
@@ -223,7 +225,7 @@ export function WorkspaceLayout({
               drafts={drafts}
               fileRefreshKeys={fileRefreshKeys}
               pendingGoto={pendingGoto}
-              showMobileNavButton={index === 0}
+              showNavButton={index === 0}
               showSideToggle={index === groups.length - 1}
               sideOpen={sideOpen}
               onFocus={onFocusGroup}
@@ -241,6 +243,7 @@ export function WorkspaceLayout({
               onSelect={onSelect}
               onOpenNav={onOpenNav}
               onOpenSettings={onOpenSettings}
+              onSettingsSaved={onSettingsSaved}
             />
           </div>
         </Fragment>

@@ -1,13 +1,19 @@
 import { useRef, useState } from "react";
 import { iconFor, colorFor } from "../explorer/SpaceRow";
-import { X, Menu, Circle, MonitorPlay, PanelRight } from "lucide-react";
+import { X, Menu, Circle, GitCompare, MonitorPlay, PanelRight, Settings, Terminal } from "lucide-react";
 import { ContextMenu, type MenuItem } from "../ui";
 import type { WorkspaceGroupId, WorkspaceTab } from "./types";
 
 const tabIconFor = (tab: WorkspaceTab) =>
+  tab.kind === "git-diff" ? GitCompare :
+  tab.kind === "settings" ? Settings :
+  tab.kind === "terminal" ? Terminal :
   tab.kind === "process" ? MonitorPlay : iconFor(tab.kind, tab.title);
 
 const tabColorFor = (tab: WorkspaceTab) =>
+  tab.kind === "git-diff" ? "text-accent" :
+  tab.kind === "settings" ? "text-text-dim" :
+  tab.kind === "terminal" ? "text-success" :
   tab.kind === "process" ? "text-accent" : colorFor(tab.kind);
 
 type DropGuide = {
@@ -205,12 +211,12 @@ export function TabBar({
       data-tab-count={tabs.length}
       className="flex items-stretch h-9 bg-bg-raised border-b border-border overflow-x-auto no-scrollbar shrink-0"
     >
-      {/* 移动端汉堡 */}
+      {/* 侧边栏开关 */}
       {onOpenNav && (
         <button
           onClick={onOpenNav}
-          className="md:hidden px-2.5 flex items-center justify-center text-text-dim hover:text-text border-r border-border shrink-0"
-          title="打开导航"
+          className="px-2.5 flex items-center justify-center text-text-dim hover:text-text hover:bg-bg-hover border-r border-border shrink-0"
+          title="切换侧边栏"
         >
           <Menu size={16} />
         </button>
@@ -219,8 +225,8 @@ export function TabBar({
       {tabs.map((t, idx) => {
         const Icon = tabIconFor(t);
         const active = t.id === activeId;
-        const running = t.kind === "conversation" && t.status === "running";
-        const unread = t.kind === "conversation" && t.unread && !active;
+        const running = t.kind === "agent" && t.status === "running";
+        const unread = t.kind === "agent" && t.unread && !active;
         const dirty = t.kind === "file" && dirtyIds.has(t.id);
         const preview = t.id === previewId;
         return (
@@ -276,7 +282,7 @@ export function TabBar({
         <button
           onClick={onToggleSideGroup}
           className={[
-            "ml-auto hidden px-2 items-center justify-center border-l border-border shrink-0 lg:flex",
+            "ml-auto flex px-2 items-center justify-center border-l border-border shrink-0",
             sideToggleOpen ? "text-accent bg-accent-soft hover:text-accent" : "text-text-faint hover:text-text hover:bg-bg-hover",
           ].join(" ")}
           title={sideToggleOpen ? "收起右侧区域" : "开启右侧区域"}

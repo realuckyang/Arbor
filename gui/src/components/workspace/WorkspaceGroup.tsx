@@ -1,4 +1,4 @@
-import type { Space } from "../../api";
+import type { Settings, Space } from "../../api";
 import { TabBar } from "./TabBar";
 import { TabContent } from "./TabContent";
 import type { WorkspaceGroupId, WorkspaceGroupState, WorkspaceTab } from "./types";
@@ -19,7 +19,7 @@ export function WorkspaceGroup({
   drafts,
   fileRefreshKeys,
   pendingGoto,
-  showMobileNavButton,
+  showNavButton,
   showSideToggle,
   sideOpen,
   onFocus,
@@ -37,6 +37,7 @@ export function WorkspaceGroup({
   onSelect,
   onOpenNav,
   onOpenSettings,
+  onSettingsSaved,
 }: {
   group: WorkspaceGroupState;
   active: boolean;
@@ -45,7 +46,7 @@ export function WorkspaceGroup({
   drafts: Record<string, string>;
   fileRefreshKeys: Record<string, number>;
   pendingGoto: { id: string; line: number } | null;
-  showMobileNavButton?: boolean;
+  showNavButton?: boolean;
   showSideToggle?: boolean;
   sideOpen: boolean;
   onFocus: (groupId: WorkspaceGroupId) => void;
@@ -63,6 +64,7 @@ export function WorkspaceGroup({
   onSelect: (n: Space) => void;
   onOpenNav?: () => void;
   onOpenSettings: () => void;
+  onSettingsSaved?: (settings: Settings) => void;
 }) {
   const tab = activeTabOf(group);
 
@@ -93,7 +95,7 @@ export function WorkspaceGroup({
         onCloseOthers={(id) => onCloseOthers(group.id, id)}
         onCloseToRight={(id) => onCloseToRight(group.id, id)}
         onCloseGroup={() => onCloseGroup(group.id)}
-        onOpenNav={showMobileNavButton ? onOpenNav : undefined}
+        onOpenNav={showNavButton ? onOpenNav : undefined}
       />
       <div className="flex-1 min-h-0 flex flex-col">
         <TabContent
@@ -105,9 +107,11 @@ export function WorkspaceGroup({
           onFileChange={onFileChange}
           onFileSaved={onFileSaved}
           onSelect={onSelect}
-          onOpenNav={showMobileNavButton ? onOpenNav : undefined}
+          onOpenNav={showNavButton ? onOpenNav : undefined}
           onOpenSettings={onOpenSettings}
+          onSettingsSaved={onSettingsSaved}
           onCloseProcess={() => onCloseTab(group.id, group.activeId || "")}
+          onCloseTerminal={() => onCloseTab(group.id, group.activeId || "")}
         />
       </div>
     </section>

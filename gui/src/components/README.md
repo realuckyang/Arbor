@@ -2,7 +2,7 @@
 
 Components are grouped by product area, not by widget shape.
 
-- `chat/`: conversation UI, message grouping, tool-call rendering.
+- `chat/`: agent message UI, message grouping, tool-call rendering.
 - `command/`: global overlays such as quick open, command palette, and search.
 - `explorer/`: left workspace tree, tree rows, context menus, breadcrumbs.
 - `files/`: file preview/editing surfaces and code editor wrappers.

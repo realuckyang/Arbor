@@ -42,9 +42,9 @@ const fileIconFor = (title: string) => {
 };
 
 const iconFor = (kind: Space["kind"], title?: string) =>
-  kind === "space" ? Folder : kind === "conversation" ? Bot : title ? fileIconFor(title) : FileText;
+  kind === "space" ? Folder : kind === "agent" ? Bot : title ? fileIconFor(title) : FileText;
 const colorFor = (kind: Space["kind"]) =>
-  kind === "space" ? "text-accent" : kind === "conversation" ? "text-warning" : "text-text-faint";
+  kind === "space" ? "text-accent" : kind === "agent" ? "text-warning" : "text-text-faint";
 
 export function SpaceRow({
   space,
@@ -133,7 +133,7 @@ export function SpaceRow({
         }}
         onContextMenu={(e) => onContextMenu(e, space)}
         className={[
-          "group relative flex items-center gap-1.5 py-[3px] pr-2 rounded cursor-pointer select-none text-text touch-none",
+          "group relative flex items-center gap-1.5 py-[3px] pr-2 cursor-pointer select-none text-text touch-none",
           isSelected && !isRenaming ? "bg-bg-inset" : "hover:bg-bg-hover",
           isDragging ? "opacity-40" : "",
           dropPos === "into" ? "drop-target" : "",
@@ -171,7 +171,7 @@ export function SpaceRow({
           <span className="flex-1 min-w-0 truncate text-[14.5px]">{space.title}</span>
         )}
 
-        {space.kind === "conversation" && <AgentStatusDot status={space.status} unread={space.unread} />}
+        {space.kind === "agent" && <AgentStatusDot status={space.status} unread={space.unread} />}
 
         {/* 更多操作:桌面 hover / 移动端常驻。快速点弹菜单,不与按住拖拽冲突 */}
         <button
@@ -239,7 +239,7 @@ export function InlineCreateRow({ depth, controls }: { depth: number; controls: 
 
   return (
     <div
-      className="flex items-center gap-1.5 py-[3px] pr-2 rounded"
+      className="flex items-center gap-1.5 py-[3px] pr-2"
       style={{ paddingLeft: `${depth * 0.9 + 0.5}rem` }}
     >
       <span className="w-4 h-4 shrink-0" />
@@ -254,7 +254,7 @@ export function InlineCreateRow({ depth, controls }: { depth: number; controls: 
         }}
         onBlur={controls.commitCreate}
         placeholder={
-          controls.creatingKind === "conversation" ? "对话名…"
+          controls.creatingKind === "agent" ? "智能体名…"
             : controls.creatingKind === "file" ? "文件名…"
             : "文件夹名…"
         }

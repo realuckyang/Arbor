@@ -1,19 +1,19 @@
 // @ts-nocheck
-// 树服务:repo 之上的业务层 —— 负责事件广播(tree_changed)+ 给对话富化运行状态/未读,
+// 树服务:repo 之上的业务层 —— 负责事件广播(tree_changed)+ 给智能体富化运行状态/未读,
 // 并把 update+move 这类组合操作收拢。API 只管 HTTP,业务都在这。
 import * as repo from "../repo/tree.js";
 import { latestCallStatusMap } from "../repo/calls.js";
 import { searchContent } from "../repo/search.js";
 import { emit } from "../bus.js";
 
-// 给对话(conversation)附加运行状态点 + 未读
+// 给智能体(agent)附加运行状态点 + 未读
 const enrich = (items) => {
-  const convIds = items.filter((n) => n.kind === "conversation").map((n) => n.id);
-  if (!convIds.length) return items;
-  const statusMap = latestCallStatusMap(convIds);
-  const unread = repo.unreadMap(convIds);
+  const agentIds = items.filter((n) => n.kind === "agent").map((n) => n.id);
+  if (!agentIds.length) return items;
+  const statusMap = latestCallStatusMap(agentIds);
+  const unread = repo.unreadMap(agentIds);
   return items.map((n) =>
-    n.kind === "conversation"
+    n.kind === "agent"
       ? { ...n, status: statusMap[n.id] || "idle", unread: !!unread[n.id] }
       : n,
   );
@@ -74,5 +74,6 @@ const markRead = (id) => {
 const ancestry = (id) => repo.ancestry(id);
 const search = (q) => (q ? searchContent(q) : []);
 const fileRawAbs = (id) => repo.resolveFileAbs(id);
+const terminalCwd = (id) => repo.terminalCwd(id);
 
-export { enrich, listChildren, listAll, getItem, create, update, remove, markRead, ancestry, search, fileRawAbs, listWorkspaces, addWorkspace, removeWorkspace };
+export { enrich, listChildren, listAll, getItem, create, update, remove, markRead, ancestry, search, fileRawAbs, listWorkspaces, addWorkspace, removeWorkspace, terminalCwd };

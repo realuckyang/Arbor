@@ -1,10 +1,10 @@
 // @ts-nocheck
 // agent 工具实现:
-//   shell                               — 跑任意命令(无限制,在对话的工作目录里)
+//   shell                               — 跑任意命令(无限制,在智能体的工作目录里)
 //   read_file / edit_file / write_file  — 有界读 / 精确替换 / 带护栏写(比纯 shell 对 LLM 更友好)
 //   web_search / web_fetch              — 联网:搜索 + 抓正文
-//   create_agent / call_agent           — 派生子对话 / 给已存在对话发消息
-// 文件类工具的相对路径都相对对话的工作目录(ctx.cwd = 它所在空间目录)解析,跟 shell 一致。
+//   create_agent / call_agent           — 派生子智能体 / 给已存在智能体发消息
+// 文件类工具的相对路径都相对智能体的工作目录(ctx.cwd = 它所在空间目录)解析,跟 shell 一致。
 
 import { exec } from "child_process";
 import { existsSync, readFileSync, writeFileSync, statSync, mkdirSync } from "fs";
@@ -47,7 +47,7 @@ const shell = ({ command, reason }, ctx) =>
     if (!cmd) { resolve("error: command 不能为空"); return; }
 
     // 模型常忘记把 dev server 放后台。常见长驻命令直接转交给进程管理器,
-    // 让对话立即继续,日志和预览 URL 通过 process panel/工具查看。
+    // 让智能体立即继续,日志和预览 URL 通过 process panel/工具查看。
     if (looksLongRunning(cmd)) {
       const proc = startProcess({ command: cmd, cwd: ctx?.cwd, reason });
       wait(1200).then(() => resolve(formatProcess(getProcess(proc.id), "detected long-running command; started background process")));
@@ -226,42 +226,42 @@ const web_fetch = async ({ url }) => {
   }
 };
 
-// ─── create_agent (异步):在自己所在空间里派生一个兄弟对话 ───
+// ─── create_agent (异步):在自己所在空间里派生一个兄弟智能体 ───
 const create_agent = ({ title, message, system }, ctx) => {
-  const newConv = ctx.createConversation({
-    spaceId: ctx.spaceIdOf(ctx.selfConversationId),
+  const newAgent = ctx.createAgent({
+    spaceId: ctx.spaceIdOf(ctx.selfAgentId),
     title: String(title || "new agent"),
     system: system ? String(system) : null,
   });
-  ctx.emit({ type: "tree_changed", item: newConv, reason: "created" });
+  ctx.emit({ type: "tree_changed", item: newAgent, reason: "created" });
 
   if (message != null && String(message).trim()) {
     ctx.appendMessage(
-      newConv.id,
+      newAgent.id,
       { role: "user", content: String(message) },
-      { source: "call", from: ctx.selfConversationId },
+      { source: "call", from: ctx.selfAgentId },
     );
-    ctx.runConversation(newConv.id, { callerId: ctx.selfConversationId }).catch((e) =>
+    ctx.runAgent(newAgent.id, { callerId: ctx.selfAgentId }).catch((e) =>
       console.error(`[create_agent] wake failed:`, e?.message),
     );
-    return `created conversation "${newConv.title}" (id=${newConv.id}). initial message dispatched; reply will arrive in your mailbox.`;
+    return `created agent "${newAgent.title}" (id=${newAgent.id}). initial message dispatched; reply will arrive in your mailbox.`;
   }
-  return `created conversation "${newConv.title}" (id=${newConv.id}).`;
+  return `created agent "${newAgent.title}" (id=${newAgent.id}).`;
 };
 
 // ─── call_agent (异步) ───
 const call_agent = ({ agent_id, message }, ctx) => {
   const targetId = String(agent_id || "").trim();
-  if (!targetId) return "conversation_id is required";
-  const target = ctx.getConversation(targetId);
-  if (!target) return `conversation not found: ${targetId}`;
+  if (!targetId) return "agent_id is required";
+  const target = ctx.getAgent(targetId);
+  if (!target) return `agent not found: ${targetId}`;
 
   ctx.appendMessage(
     targetId,
     { role: "user", content: String(message || "") },
-    { source: "call", from: ctx.selfConversationId },
+    { source: "call", from: ctx.selfAgentId },
   );
-  ctx.runConversation(targetId, { callerId: ctx.selfConversationId }).catch((e) =>
+  ctx.runAgent(targetId, { callerId: ctx.selfAgentId }).catch((e) =>
     console.error(`[call_agent] wake failed:`, e?.message),
   );
   return `dispatched to "${target.title}" (id=${targetId}). reply will arrive in your mailbox as a new message.`;

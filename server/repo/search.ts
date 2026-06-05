@@ -5,7 +5,7 @@ import path from "path";
 import { ensureRoot, IGNORE_DIRS, listWorkspaces } from "./tree.js";
 
 const isHidden = (name) => name.startsWith(".");
-const isConvFile = (name) => name.endsWith(".conv.json");
+const isAgentFile = (name) => name.endsWith(".agent.json");
 
 const searchContent = (query, { maxMatchesPerFile = 50, maxTotal = 1000, maxFileSize = 1_000_000 } = {}) => {
   const roots = listWorkspaces().map((w) => w.path);
@@ -26,7 +26,7 @@ const searchContent = (query, { maxMatchesPerFile = 50, maxTotal = 1000, maxFile
       if (isHidden(e.name)) continue;
       const abs = path.join(dir, e.name);
       if (e.isDirectory()) { if (!IGNORE_DIRS.has(e.name)) walk(abs); continue; }
-      if (isConvFile(e.name)) continue; // 对话元数据不搜
+      if (isAgentFile(e.name)) continue; // 智能体元数据不搜
 
       let content;
       try {

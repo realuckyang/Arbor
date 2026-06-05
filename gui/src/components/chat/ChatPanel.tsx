@@ -48,32 +48,33 @@ export function ChatPanel({
   }, [space.id, loadMessages]);
 
   useEffect(() => {
-    socket.send({ type: "subscribe", conversationId: space.id });
+    socket.send({ type: "subscribe", agentId: space.id });
+    const matchesAgent = (p: any) => p.agentId === space.id;
     const offDelta = socket.on("delta", (p: any) => {
-      if (p.conversationId !== space.id) return;
+      if (!matchesAgent(p)) return;
       if (p.content) setStreaming((prev) => prev + p.content);
     });
     const offMsg = socket.on("message", (p: any) => {
-      if (p.conversationId !== space.id) return;
+      if (!matchesAgent(p)) return;
       setStreaming("");                                     // 完整消息到了,清空流式 buffer
       setMessages((prev) => [...prev, p.message]);
       api.markSpaceRead(space.id).catch(() => {});
     });
     const offEnd = socket.on("end", (p: any) => {
-      if (p.conversationId !== space.id) return;
+      if (!matchesAgent(p)) return;
       setSending(false);
       setStreaming("");
       loadMessages();
       api.markSpaceRead(space.id).catch(() => {});
     });
     const offErr = socket.on("error", (p: any) => {
-      if (p.conversationId !== space.id) return;
+      if (!matchesAgent(p)) return;
       setSending(false);
       setStreaming("");
     });
     return () => {
       offDelta(); offMsg(); offEnd(); offErr();
-      socket.send({ type: "unsubscribe", conversationId: space.id });
+      socket.send({ type: "unsubscribe", agentId: space.id });
     };
   }, [space.id, socket, loadMessages]);
 
@@ -94,7 +95,7 @@ export function ChatPanel({
     if (!configured) { onOpenSettings?.(); return; } // 没配模型:引导去设置,不空发
     setSending(true);
     setPrompt("");
-    socket.send({ type: "send", conversationId: space.id, prompt: text });
+    socket.send({ type: "send", agentId: space.id, prompt: text });
   };
 
   return (
@@ -103,7 +104,7 @@ export function ChatPanel({
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-4 md:px-12 pt-6 pb-8 flex flex-col gap-4">
           {messages.length === 0 && !sending && (
-            <div className="text-text-faint text-[14px]">说点什么开始对话…</div>
+            <div className="text-text-faint text-[14px]">给这个智能体发条消息…</div>
           )}
           {groupMessages(messages).map((item, i) => (
             <GroupedItem key={item._id || i} item={item} />
@@ -125,7 +126,7 @@ export function ChatPanel({
         {!configured && (
           <div className="flex items-center gap-1.5 mb-2 text-[12.5px] text-warning">
             <Settings size={13} className="shrink-0" />
-            <span className="flex-1 min-w-0 truncate">还没配置模型,无法对话。</span>
+            <span className="flex-1 min-w-0 truncate">还没配置模型,智能体无法运行。</span>
             <button onClick={() => onOpenSettings?.()} className="shrink-0 font-medium hover:underline">
               去设置 →
             </button>
@@ -158,7 +159,7 @@ export function ChatPanel({
           />
           {sending ? (
             <button
-              onClick={() => socket.send({ type: "stop", conversationId: space.id })}
+              onClick={() => socket.send({ type: "stop", agentId: space.id })}
               className="w-8 h-8 rounded flex items-center justify-center text-text-faint hover:text-danger hover:bg-bg-hover transition-colors shrink-0"
             >
               <Square size={14} />

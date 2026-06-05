@@ -1,21 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { useSocket } from "./ws";
-import { api, type Space } from "./api";
-import { QuickOpen, CommandPalette, SearchPanel, type Command } from "./components/command";
+import { api, type Settings as AppSettings, type Space } from "./api";
+import type { ActivityId } from "./components/activity";
+import { QuickOpen, CommandPalette, type Command } from "./components/command";
 import { SpaceTree } from "./components/explorer";
-import { SettingsPanel } from "./components/settings";
-import { WorkspaceLayout, isSpaceTab, useTabGroups } from "./components/workspace";
+import { WorkspaceLayout, isSettingsTab, isSpaceTab, useTabGroups } from "./components/workspace";
 import { FileText, Folder, FolderPlus, Bot, Search, Settings as SettingsIcon, X, MonitorPlay, PanelRight } from "lucide-react";
 import type { ManagedProcess } from "./api";
 
 export function App() {
   const socket = useSocket();
-  const [showSettings, setShowSettings] = useState(false);
   const [treeRefresh, setTreeRefresh] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [desktopNavOpen, setDesktopNavOpen] = useState(true);
+  const [showActivityBar, setShowActivityBar] = useState(false);
+  const [activeActivity, setActiveActivity] = useState<ActivityId>("explorer");
   const [quickOpen, setQuickOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [pendingGoto, setPendingGoto] = useState<{ id: string; line: number } | null>(null);
   const [fileRefreshKeys, setFileRefreshKeys] = useState<Record<string, number>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -46,7 +47,6 @@ export function App() {
   dirtyRef.current = dirtyIds;
   const activeSpace = tabGroups.activeSpace;
   const openNode = (n: Space | null, opts: { preview?: boolean; side?: boolean; groupId?: "main" | "side" } = {}) => {
-    setShowSettings(false);
     setSelectedNode(n);
     tabGroups.openNode(n, opts);
   };
@@ -54,6 +54,34 @@ export function App() {
     const node = selectedNode || activeSpace;
     if (!node) return null;
     return node.kind === "space" ? node.id : node.parent_id;
+  };
+  const openTerminal = (n: Space, opts: { command?: string; titlePrefix?: string } = {}) => {
+    setSelectedNode(n);
+    const cwdHint = n.kind === "space" ? n.id : n.id;
+    const name = n.kind === "space" ? n.title : n.parent_id?.split("/").filter(Boolean).pop() || n.title;
+    const title = `${opts.titlePrefix || "Terminal"}: ${name}`;
+    tabGroups.openTerminal(cwdHint, title, { command: opts.command });
+  };
+  const openSettings = () => tabGroups.openSettings();
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getSettings()
+      .then((r) => { if (!cancelled) setShowActivityBar(!!r.settings.showActivityBar); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const onSettingsSaved = (settings: AppSettings) => {
+    setShowActivityBar(!!settings.showActivityBar);
+  };
+  const openActivity = (id: ActivityId) => {
+    setActiveActivity(id);
+    if (window.matchMedia("(min-width: 768px)").matches) {
+      setDesktopNavOpen(true);
+      return;
+    }
+    setMobileNavOpen(true);
   };
 
   // 树相关 WS 事件 → 刷新树/状态点(节流,流式时 message 事件很密)
@@ -115,12 +143,12 @@ export function App() {
     return () => { cancelled = true; off(); };
   }, [socket, tabGroups.openProcess]);
 
-  // 刷新打开的对话标签的状态点(运行中/未读)
+  // 刷新打开的智能体标签的状态点(运行中/未读)
   useEffect(() => {
-    const convTabs = allTabsRef.current.filter((t) => isSpaceTab(t) && t.kind === "conversation");
-    if (!convTabs.length) return;
+    const agentTabs = allTabsRef.current.filter((t) => isSpaceTab(t) && t.kind === "agent");
+    if (!agentTabs.length) return;
     let cancelled = false;
-    Promise.all(convTabs.map((t) => api.getSpace(t.id).then((r) => r.space).catch(() => null)))
+    Promise.all(agentTabs.map((t) => api.getSpace(t.id).then((r) => r.space).catch(() => null)))
       .then((items) => {
         if (cancelled) return;
         for (const item of items) {
@@ -140,7 +168,7 @@ export function App() {
       }
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "f") {
         e.preventDefault();
-        setSearchOpen((v) => !v);
+        openActivity("search");
       }
     };
     window.addEventListener("keydown", onKey);
@@ -149,7 +177,7 @@ export function App() {
 
   // 在当前选中工作区/文件夹里新建(命令面板用,名字走 prompt)
   const createAtCurrentTarget = async (kind: Space["kind"]) => {
-    const title = window.prompt(`新建${kind === "space" ? "文件夹" : kind === "conversation" ? "对话" : "文件"}的名字:`);
+    const title = window.prompt(`新建${kind === "space" ? "文件夹" : kind === "agent" ? "智能体" : "文件"}的名字:`);
     if (!title || !title.trim()) return;
     try {
       const parentId = currentCreateParentId() || undefined;
@@ -162,7 +190,9 @@ export function App() {
   };
 
   const addWorkspace = async () => {
+    setActiveActivity("explorer");
     setMobileNavOpen(true);
+    setDesktopNavOpen(true);
     window.dispatchEvent(new Event("arbor:add-workspace"));
   };
 
@@ -173,12 +203,12 @@ export function App() {
   };
 
   const commands: Command[] = [
-    { id: "new-conversation", label: "新建对话", icon: <Bot size={14} />, run: () => createAtCurrentTarget("conversation") },
+    { id: "new-agent", label: "新建智能体", icon: <Bot size={14} />, run: () => createAtCurrentTarget("agent") },
     { id: "new-space", label: "新建文件夹", icon: <Folder size={14} />, run: () => createAtCurrentTarget("space") },
     { id: "new-file", label: "新建文件", icon: <FileText size={14} />, run: () => createAtCurrentTarget("file") },
     { id: "add-workspace", label: "添加工作区", icon: <FolderPlus size={14} />, run: addWorkspace },
     { id: "quick-open", label: "快速打开…", hint: "⌘P", icon: <Search size={14} />, run: () => setQuickOpen(true) },
-    { id: "search", label: "在所有文件中搜索…", hint: "⌘⇧F", icon: <Search size={14} />, run: () => setSearchOpen(true) },
+    { id: "search", label: "在所有文件中搜索…", hint: "⌘⇧F", icon: <Search size={14} />, run: () => openActivity("search") },
     { id: "preview", label: "打开预览", icon: <MonitorPlay size={14} />, run: () => tabGroups.openProcess({ groupId: "side" }) },
     {
       id: "move-tab-side",
@@ -189,7 +219,7 @@ export function App() {
         if (id) tabGroups.moveTab(tabGroups.activeGroupId, id);
       },
     },
-    { id: "settings", label: "打开设置", icon: <SettingsIcon size={14} />, run: () => setShowSettings(true) },
+    { id: "settings", label: "打开设置", icon: <SettingsIcon size={14} />, run: openSettings },
     {
       id: "close-tab",
       label: "关闭当前标签",
@@ -202,63 +232,72 @@ export function App() {
     { id: "close-all", label: "关闭所有标签", icon: <X size={14} />, run: () => tabGroups.closeAll() },
   ];
 
-  const openNav = () => setMobileNavOpen(true);
+  const toggleNav = () => {
+    if (window.matchMedia("(min-width: 768px)").matches) {
+      setDesktopNavOpen((open) => !open);
+      return;
+    }
+    setMobileNavOpen(true);
+  };
   const closeNav = () => setMobileNavOpen(false);
 
   return (
     <div className="h-screen flex overflow-hidden bg-bg text-text font-sans relative">
       <SpaceTree
         selectedId={selectedNode?.id || activeSpace?.id || ""}
+        view={activeActivity}
+        onViewChange={openActivity}
         onSelect={openNode}
+        onOpenAt={openAt}
+        onOpenGitDiff={(root, path, staged) => tabGroups.openGitDiff(root, path, staged)}
         onOpenSide={(n) => openNode(n, { groupId: "side" })}
+        onOpenTerminal={openTerminal}
         createParentId={currentCreateParentId()}
         refreshKey={treeRefresh}
-        showSettings={showSettings}
-        onToggleSettings={() => setShowSettings((v) => !v)}
+        showActivityBar={showActivityBar}
+        settingsActive={isSettingsTab(tabGroups.activeTab)}
+        onOpenSettings={openSettings}
         mobileOpen={mobileNavOpen}
+        desktopOpen={desktopNavOpen}
         onCloseMobile={closeNav}
         onChanged={() => setTreeRefresh((n) => n + 1)}
       />
 
       {quickOpen && <QuickOpen onPick={(n) => openNode(n)} onClose={() => setQuickOpen(false)} />}
       {cmdOpen && <CommandPalette commands={commands} onClose={() => setCmdOpen(false)} />}
-      {searchOpen && <SearchPanel onOpenAt={openAt} onClose={() => setSearchOpen(false)} />}
 
       {/* 移动端遮罩 */}
       {mobileNavOpen && (
-        <div className="md:hidden fixed inset-0 bg-black/30 z-30 transition-opacity" onClick={closeNav} />
+        <div className="md:hidden absolute inset-0 bg-black/30 z-30 transition-opacity" onClick={closeNav} />
       )}
 
       <div className="flex-1 flex min-w-0 min-h-0">
-        {showSettings ? (
-          <SettingsPanel onClose={() => setShowSettings(false)} onOpenNav={openNav} />
-        ) : (
-          <WorkspaceLayout
-            groups={tabGroups.visibleGroups}
-            activeGroupId={tabGroups.activeGroupId}
-            sideOpen={tabGroups.sideOpen}
-            socket={socket}
-            dirtyIds={dirtyIds}
-            drafts={drafts}
-            fileRefreshKeys={fileRefreshKeys}
-            pendingGoto={pendingGoto}
-            onFocusGroup={tabGroups.focusGroup}
-            onActivateTab={tabGroups.activateTab}
-            onCloseTab={tabGroups.closeTab}
-            onReorderTabs={tabGroups.reorderTabs}
-            onMoveTabFromGroup={tabGroups.moveTab}
-            onMoveTab={tabGroups.moveTab}
-            onToggleSideGroup={tabGroups.toggleSideGroup}
-            onCloseOthers={tabGroups.closeOthers}
-            onCloseToRight={tabGroups.closeToRight}
-            onCloseGroup={tabGroups.closeGroup}
-            onFileChange={onFileChange}
-            onFileSaved={onFileSaved}
-            onSelect={openNode}
-            onOpenNav={openNav}
-            onOpenSettings={() => setShowSettings(true)}
-          />
-        )}
+        <WorkspaceLayout
+          groups={tabGroups.visibleGroups}
+          activeGroupId={tabGroups.activeGroupId}
+          sideOpen={tabGroups.sideOpen}
+          socket={socket}
+          dirtyIds={dirtyIds}
+          drafts={drafts}
+          fileRefreshKeys={fileRefreshKeys}
+          pendingGoto={pendingGoto}
+          onFocusGroup={tabGroups.focusGroup}
+          onActivateTab={tabGroups.activateTab}
+          onCloseTab={tabGroups.closeTab}
+          onReorderTabs={tabGroups.reorderTabs}
+          onMoveTabFromGroup={tabGroups.moveTab}
+          onMoveTab={tabGroups.moveTab}
+          onToggleSideGroup={tabGroups.toggleSideGroup}
+          onCloseOthers={tabGroups.closeOthers}
+          onCloseToRight={tabGroups.closeToRight}
+          onCloseGroup={tabGroups.closeGroup}
+          onFileChange={onFileChange}
+          onFileSaved={onFileSaved}
+          onSelect={openNode}
+          onOpenNav={toggleNav}
+          onOpenSettings={openSettings}
+          onSettingsSaved={onSettingsSaved}
+        />
       </div>
     </div>
   );

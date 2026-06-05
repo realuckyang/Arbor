@@ -17,21 +17,21 @@ const initDb = () => {
   db.exec("PRAGMA foreign_keys = ON");
 
   db.exec(`
-    -- 结构(空间/文件/对话)全在文件系统:workspaces/ 下
-    --   目录 = 空间,真实文件 = 文件,<uuid>.conv.json = 对话
+    -- 结构(空间/文件/智能体)全在文件系统:workspaces/ 下
+    --   目录 = 空间,真实文件 = 文件,<uuid>.agent.json = 智能体
     -- SQLite 只存运行时状态:消息流、调用关系、设置。
-    --   conversation_id / caller_id / callee_id = 对话的 uuid(.conv.json 文件名)
+    --   agent_id / caller_id / callee_id = 智能体的 uuid
 
-    -- 消息:每个对话的邮箱
+    -- 消息:每个智能体的邮箱
     CREATE TABLE IF NOT EXISTS messages (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      conversation_id TEXT NOT NULL,
+      agent_id        TEXT NOT NULL,
       body            TEXT NOT NULL,
       meta            TEXT,
       created_at      TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    -- 调用:对话之间的异步通信 + 状态机
+    -- 调用:智能体之间的异步通信 + 状态机
     CREATE TABLE IF NOT EXISTS calls (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
       caller_id       TEXT,
@@ -60,9 +60,17 @@ const initDb = () => {
       last_opened_at TEXT
     );
 
-    CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, id);
     CREATE INDEX IF NOT EXISTS idx_calls_caller  ON calls(caller_id, status);
     CREATE INDEX IF NOT EXISTS idx_calls_callee  ON calls(callee_id, status);
+  `);
+
+  const messageCols = db.prepare("PRAGMA table_info(messages)").all().map((c) => c.name);
+  if (messageCols.includes("conversation_id") && !messageCols.includes("agent_id")) {
+    db.exec("ALTER TABLE messages RENAME COLUMN conversation_id TO agent_id");
+  }
+  db.exec(`
+    DROP INDEX IF EXISTS idx_messages_conv;
+    CREATE INDEX IF NOT EXISTS idx_messages_agent ON messages(agent_id, id);
   `);
 
   return db;

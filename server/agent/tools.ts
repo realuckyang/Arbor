@@ -25,7 +25,7 @@ const tools = [
     function: {
       name: "run_process",
       description:
-        "启动一个后台进程,用于 dev server、静态文件服务、watcher 等长驻命令。它会立即返回进程 id、日志片段和可能的 preview URL;不会阻塞对话。" +
+        "启动一个后台进程,用于 dev server、静态文件服务、watcher 等长驻命令。它会立即返回进程 id、日志片段和可能的 preview URL;不会阻塞智能体。" +
         "例如 npm run dev、python -m http.server、vite、next dev 都用它。reason 是一句话摘要。",
       parameters: {
         type: "object",
@@ -176,15 +176,15 @@ const tools = [
     function: {
       name: "create_agent",
       description:
-        "在你所在的空间下创建一个新对话(agent)。如果提供 message,会同时往它派发该初始消息(异步,不阻塞)。" +
+        "在你所在的空间下创建一个新智能体(agent)。如果提供 message,会同时往它派发该初始消息(异步,不阻塞)。" +
         "对方跑完后,它的最终回复会自动作为新消息投进你的邮箱。reason 是一句话摘要。",
       parameters: {
         type: "object",
         properties: {
-          reason:  { type: "string", description: "为什么要创建这个对话(一句话摘要)" },
-          title:   { type: "string", description: "对话名字" },
+          reason:  { type: "string", description: "为什么要创建这个智能体(一句话摘要)" },
+          title:   { type: "string", description: "智能体名字" },
           message: { type: "string", description: "可选:初始消息" },
-          system:  { type: "string", description: "可选:对话的 system prompt" },
+          system:  { type: "string", description: "可选:智能体的 system prompt" },
         },
         required: ["reason", "title"],
       },
@@ -195,13 +195,13 @@ const tools = [
     function: {
       name: "call_agent",
       description:
-        "给已存在的对话发一条消息,异步。立即返回。对方跑完后,它的最终回复会自动作为新消息投进你的邮箱(meta.source='call_result')。" +
+        "给已存在的智能体发一条消息,异步。立即返回。对方跑完后,它的最终回复会自动作为新消息投进你的邮箱(meta.source='call_result')。" +
         "reason 是一句话摘要。",
       parameters: {
         type: "object",
         properties: {
           reason:   { type: "string", description: "为什么要调它(一句话摘要)" },
-          agent_id: { type: "string", description: "目标对话(conversation)的 id" },
+          agent_id: { type: "string", description: "目标智能体(agent)的 id" },
           message:  { type: "string", description: "要发送的消息" },
         },
         required: ["reason", "agent_id", "message"],

@@ -5,6 +5,7 @@ const DEFAULTS = {
   apiUrl: "",
   apiKey: "",
   model: "",
+  showActivityBar: false,
   system:
     "你是 Arbor 里的一个 agent,以一个节点的形式存活在用户的工作树里。\n" +
     "\n" +
@@ -28,11 +29,16 @@ const DEFAULTS = {
     "  • 完成任务后给出最终回复;无须告知用户工具细节。",
 };
 
+const toBool = (value) =>
+  value === true || value === "true" || value === "1" || value === 1;
+
 const getSettings = () => {
   const rows = getDb().prepare("SELECT key, value FROM settings").all();
   const stored = {};
   for (const row of rows) stored[row.key] = row.value;
-  return { ...DEFAULTS, ...stored };
+  const settings = { ...DEFAULTS, ...stored };
+  settings.showActivityBar = toBool(settings.showActivityBar);
+  return settings;
 };
 
 const saveSettings = (patch = {}) => {

@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Space } from "../../api";
 import { api } from "../../api";
+import { ActivityBar, type ActivityId } from "../activity";
 import { SpaceRow, InlineCreateRow, iconFor, colorFor, type TreeControls, type DropPosition } from "./SpaceRow";
+import { AgentTreeView } from "./AgentTreeView";
+import { GitView, SearchView } from "../sidebar";
 import { ContextMenu, type MenuItem } from "../ui";
-import { Settings, Folder, FolderPlus, FileText, Bot, Trash2, Pencil, Plus, X, Copy, PanelRight } from "lucide-react";
+import { Settings, Folder, FolderPlus, FolderOpen, FileText, Bot, Trash2, Pencil, Plus, X, Copy, PanelRight, Terminal } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
@@ -22,24 +25,38 @@ const ROOT_ID = "__root__";
 
 export function SpaceTree({
   selectedId,
+  view = "explorer",
+  onViewChange,
   onSelect,
+  onOpenAt,
+  onOpenGitDiff,
   onOpenSide,
+  onOpenTerminal,
   createParentId,
   refreshKey,
-  showSettings,
-  onToggleSettings,
+  showActivityBar,
+  settingsActive,
+  onOpenSettings,
   mobileOpen = false,
+  desktopOpen = true,
   onCloseMobile,
   onChanged,
 }: {
   selectedId: string;
+  view?: ActivityId;
+  onViewChange?: (id: ActivityId) => void;
   onSelect: (n: Space | null) => void;
+  onOpenAt?: (id: string, line: number) => void;
+  onOpenGitDiff?: (root: string, path: string, staged?: boolean) => void;
   onOpenSide?: (n: Space) => void;
+  onOpenTerminal?: (n: Space, opts?: { command?: string; titlePrefix?: string }) => void;
   createParentId?: string | null;
   refreshKey: number;
-  showSettings: boolean;
-  onToggleSettings: () => void;
+  showActivityBar: boolean;
+  settingsActive: boolean;
+  onOpenSettings: () => void;
   mobileOpen?: boolean;
+  desktopOpen?: boolean;
   onCloseMobile?: () => void;
   onChanged?: () => void;
 }) {
@@ -52,6 +69,7 @@ export function SpaceTree({
   const [workspacePathDraft, setWorkspacePathDraft] = useState("");
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [addingWorkspace, setAddingWorkspace] = useState(false);
+  const [pickingWorkspace, setPickingWorkspace] = useState(false);
   const autoExpandedWorkspaces = useRef<Set<string>>(new Set());
 
   // 展开集
@@ -199,6 +217,19 @@ export function SpaceTree({
     }
   };
 
+  const pickWorkspace = async () => {
+    setPickingWorkspace(true);
+    setWorkspaceError(null);
+    try {
+      const result = await api.pickWorkspaceDirectory();
+      if (result.path) setWorkspacePathDraft(result.path);
+    } catch (e: any) {
+      setWorkspaceError(e.message || "选择目录失败");
+    } finally {
+      setPickingWorkspace(false);
+    }
+  };
+
   // ── 重命名 ──
   const startRename = (n: Space) => { setRenamingId(n.id); setRenameDraft(n.title); };
   const commitRename = async () => {
@@ -322,8 +353,8 @@ export function SpaceTree({
     const items: MenuItem[] = [];
     if (space.kind === "space") {
       items.push(
-        { label: "新建对话", icon: <Bot size={13} className="text-warning" />,
-          onClick: () => startCreate(space.id, "conversation") },
+        { label: "新建智能体", icon: <Bot size={13} className="text-warning" />,
+          onClick: () => startCreate(space.id, "agent") },
         "divider",
         { label: "新建文件夹", icon: <Folder size={13} className="text-accent" />,
           onClick: () => startCreate(space.id, "space") },
@@ -332,8 +363,8 @@ export function SpaceTree({
         "divider",
       );
     }
-    // 对话:复制稳定 uuid(给 call_agent 用);空间/文件:复制相对 workspaces 的干净路径
-    const isConv = space.kind === "conversation";
+    // 智能体:复制稳定 uuid(给 call_agent 用);空间/文件:复制相对 workspaces 的干净路径
+    const isConv = space.kind === "agent";
     const copyText = isConv ? space.id : space.id.replace(/^.*\/workspaces\//, "");
     if (space.kind !== "space" && onOpenSide) {
       items.push(
@@ -342,7 +373,6 @@ export function SpaceTree({
       );
     }
     items.push(
-      { label: "重命名", icon: <Pencil size={13} />, onClick: () => startRename(space) },
       { label: isConv ? "复制 ID" : "复制路径", icon: <Copy size={13} />,
         onClick: async () => {
           try { await navigator.clipboard.writeText(copyText); }
@@ -354,6 +384,14 @@ export function SpaceTree({
         },
       },
       "divider",
+      { label: "打开终端", icon: <Terminal size={13} className="text-success" />,
+        onClick: () => onOpenTerminal?.(space), disabled: !onOpenTerminal },
+      { label: "启动 Codex", icon: <Terminal size={13} className="text-success" />,
+        onClick: () => onOpenTerminal?.(space, { command: "codex", titlePrefix: "Codex" }), disabled: !onOpenTerminal },
+      { label: "启动 Claude Code", icon: <Terminal size={13} className="text-success" />,
+        onClick: () => onOpenTerminal?.(space, { command: "claude", titlePrefix: "Claude Code" }), disabled: !onOpenTerminal },
+      "divider",
+      { label: "重命名", icon: <Pencil size={13} />, onClick: () => startRename(space) },
       { label: space.workspace ? "移除工作区" : "删除", icon: <Trash2 size={13} />, danger: true,
         onClick: async () => {
           if (space.workspace) {
@@ -386,17 +424,17 @@ export function SpaceTree({
     if (mobileOpen && n?.kind !== "space") onCloseMobile?.();
   };
   const handleToggleSettings = () => {
-    onToggleSettings();
+    onOpenSettings();
     if (mobileOpen) onCloseMobile?.();
   };
 
-  // 「新建」下拉:对话 / 空间 / 文件(锚在按钮下方,复用 ContextMenu)
+  // 「新建」下拉:智能体 / 空间 / 文件(锚在按钮下方,复用 ContextMenu)
   const openNewMenu = (e: React.MouseEvent, parentId: string | null = currentCreateParentId()) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setMenu({
       x: r.left, y: r.bottom + 4,
       items: [
-        { label: "新建对话", icon: <Bot size={13} className="text-warning" />, onClick: () => startCreate(parentId, "conversation") },
+        { label: "新建智能体", icon: <Bot size={13} className="text-warning" />, onClick: () => startCreate(parentId, "agent") },
         "divider",
         { label: "新建文件夹", icon: <Folder size={13} className="text-accent" />, onClick: () => startCreate(parentId, "space") },
         { label: "新建文件", icon: <FileText size={13} className="text-text-faint" />, onClick: () => startCreate(parentId, "file") },
@@ -412,6 +450,7 @@ export function SpaceTree({
     renamingId, renameDraft, setRenameDraft, commitRename, cancelRename,
     activeId, overNodeId: overInfo?.spaceId || null, dropPos: overInfo?.pos || null,
   };
+  const isExplorerView = view === "explorer";
 
   return (
     <DndContext
@@ -424,21 +463,24 @@ export function SpaceTree({
       <aside
         style={{ width: `min(${sidebarWidth}px, calc(100vw - 32px))` }}
         className={[
-          "relative flex-col border-r border-border bg-bg-raised shrink-0",
-          "fixed inset-y-0 left-0 z-40 shadow-2xl shadow-black/10",
-          "md:relative md:shadow-none md:flex",
-          // 移动端:关闭时直接 hidden(可靠,不依赖 translate);桌面端始终显示
-          mobileOpen ? "flex" : "hidden md:flex",
+          "flex-col border-r border-border bg-bg-raised shrink-0",
+          "absolute inset-y-0 left-0 z-40 shadow-2xl shadow-black/10",
+          "md:relative md:shadow-none",
+          // 移动端:关闭时直接 hidden;桌面端由左上角汉堡切换
+          mobileOpen ? "flex" : "hidden",
+          desktopOpen ? "md:flex" : "md:hidden",
         ].join(" ")}
       >
         {/* brand */}
         <div className="flex items-center gap-2.5 px-3.5 py-3 border-b border-border">
           <span className="text-[20px] leading-none select-none">🌳</span>
           <span className="text-[17px] font-semibold text-text flex-1 tracking-tight">Arbor</span>
-          <button onClick={openNewMenu} title="新建"
-            className="w-6 h-6 rounded flex items-center justify-center text-text-faint hover:text-accent hover:bg-bg-hover transition-colors">
-            <Plus size={16} />
-          </button>
+          {isExplorerView && (
+            <button onClick={openNewMenu} title="新建"
+              className="w-6 h-6 rounded flex items-center justify-center text-text-faint hover:text-accent hover:bg-bg-hover transition-colors">
+              <Plus size={16} />
+            </button>
+          )}
           {onCloseMobile && (
             <button
               onClick={onCloseMobile}
@@ -449,37 +491,47 @@ export function SpaceTree({
           )}
         </div>
 
-        {/* tree(根 droppable) */}
-        <RootDroppable highlight={overRoot} onContextMenu={onBlankContext}>
-          {creatingUnder === "" && <InlineCreateRow depth={0} controls={controls} />}
+        {showActivityBar && <ActivityBar active={view} onSelect={(id) => onViewChange?.(id)} />}
 
-          {roots.map((space) => (
-            <SpaceRow
-              key={space.id}
-              space={space}
-              selectedId={selectedId}
-              onSelect={handleSelect}
-              onContextMenu={onNodeContext}
-              refreshKey={refreshKey}
-              controls={controls}
-            />
-          ))}
+        {view === "explorer" && (
+          <RootDroppable highlight={overRoot} onContextMenu={onBlankContext}>
+            {creatingUnder === "" && <InlineCreateRow depth={0} controls={controls} />}
 
-          {roots.length === 0 && creatingUnder !== "" && (
-            <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-              <div className="text-3xl opacity-80">🌱</div>
-              <div className="text-[13px] text-text-faint leading-relaxed">
-                还空着。<br />新建一个对话或文件夹开始生长。
+            {roots.map((space) => (
+              <SpaceRow
+                key={space.id}
+                space={space}
+                selectedId={selectedId}
+                onSelect={handleSelect}
+                onContextMenu={onNodeContext}
+                refreshKey={refreshKey}
+                controls={controls}
+              />
+            ))}
+
+            {roots.length === 0 && creatingUnder !== "" && (
+              <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+                <div className="text-3xl opacity-80">🌱</div>
+                <div className="text-[13px] text-text-faint leading-relaxed">
+                  还空着。<br />新建一个智能体或文件夹开始生长。
+                </div>
+                <button
+                  onClick={() => startCreate(null, "agent")}
+                  className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-accent text-white text-[13px] hover:opacity-90 transition-opacity"
+                >
+                  <Bot size={13} /> 新建智能体
+                </button>
               </div>
-              <button
-                onClick={() => startCreate(null, "conversation")}
-                className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-accent text-white text-[13px] hover:opacity-90 transition-opacity"
-              >
-                <Bot size={13} /> 新建对话
-              </button>
-            </div>
-          )}
-        </RootDroppable>
+            )}
+          </RootDroppable>
+        )}
+        {view === "agents" && (
+          <AgentTreeView selectedId={selectedId} refreshKey={refreshKey} onSelect={handleSelect} />
+        )}
+        {view === "search" && (
+          <SearchView onOpenAt={(id, line) => onOpenAt?.(id, line)} />
+        )}
+        {view === "git" && <GitView onOpenDiff={onOpenGitDiff} onChanged={onChanged} />}
 
         {/* footer */}
         <div className="border-t border-border px-1.5 py-1.5">
@@ -488,7 +540,7 @@ export function SpaceTree({
             title="Settings"
             className={[
               "w-full flex items-center gap-2 px-2 py-1.5 rounded text-[14px] transition-colors",
-              showSettings ? "bg-bg-inset text-text" : "text-text-dim hover:bg-bg-hover hover:text-text",
+              settingsActive ? "bg-bg-inset text-text" : "text-text-dim hover:bg-bg-hover hover:text-text",
             ].join(" ")}
           >
             <Settings size={13} />
@@ -502,9 +554,11 @@ export function SpaceTree({
             value={workspacePathDraft}
             error={workspaceError}
             submitting={addingWorkspace}
+            picking={pickingWorkspace}
             onChange={(value) => { setWorkspacePathDraft(value); setWorkspaceError(null); }}
+            onPick={pickWorkspace}
             onSubmit={addWorkspace}
-            onClose={() => { if (!addingWorkspace) setAddWorkspaceOpen(false); }}
+            onClose={() => { if (!addingWorkspace && !pickingWorkspace) setAddWorkspaceOpen(false); }}
           />
         )}
         <div
@@ -535,7 +589,7 @@ function RootDroppable({
   return (
     <div
       ref={setNodeRef}
-      className={`flex-1 overflow-y-auto px-1.5 pt-2 pb-3 ${highlight ? "bg-accent-soft" : ""}`}
+      className={`flex-1 overflow-y-auto ${highlight ? "bg-accent-soft" : ""}`}
       onContextMenu={onContextMenu}
     >
       {children}
@@ -558,14 +612,18 @@ function AddWorkspaceDialog({
   value,
   error,
   submitting,
+  picking,
   onChange,
+  onPick,
   onSubmit,
   onClose,
 }: {
   value: string;
   error: string | null;
   submitting: boolean;
+  picking: boolean;
   onChange: (value: string) => void;
+  onPick: () => void;
   onSubmit: () => void;
   onClose: () => void;
 }) {
@@ -595,13 +653,24 @@ function AddWorkspaceDialog({
         </div>
         <div className="space-y-3 px-4 py-4">
           <label className="block text-[12px] font-medium text-text-dim">文件夹路径</label>
-          <input
-            ref={inputRef}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder="/Users/me/projects/my-app"
-            className="w-full rounded-md border border-border bg-bg px-3 py-2 text-[13px] text-text outline-none focus:border-accent"
-          />
+          <div className="flex gap-2">
+            <input
+              ref={inputRef}
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder="/Users/me/projects/my-app"
+              className="min-w-0 flex-1 rounded-md border border-border bg-bg px-3 py-2 text-[13px] text-text outline-none focus:border-accent"
+            />
+            <button
+              type="button"
+              onClick={onPick}
+              disabled={submitting || picking}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-bg px-3 py-2 text-[13px] text-text-dim hover:bg-bg-hover hover:text-text disabled:opacity-50"
+            >
+              <FolderOpen size={14} />
+              {picking ? "选择中" : "选择目录"}
+            </button>
+          </div>
           {error && <div className="text-[12px] text-danger">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 border-t border-border px-4 py-3">

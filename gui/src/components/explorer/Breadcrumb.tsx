@@ -4,7 +4,7 @@ import { api } from "../../api";
 import { Folder, Bot, FileText, Menu } from "lucide-react";
 
 const iconFor = (kind: Space["kind"]) =>
-  kind === "space" ? Folder : kind === "conversation" ? Bot : FileText;
+  kind === "space" ? Folder : kind === "agent" ? Bot : FileText;
 
 export function Breadcrumb({
   spaceId,
@@ -24,12 +24,12 @@ export function Breadcrumb({
 
   return (
     <div className="flex items-center gap-1 px-3 md:px-6 py-2.5 border-b border-border bg-bg">
-      {/* 汉堡(仅移动端) */}
+      {/* 侧边栏开关 */}
       {onOpenNav && (
         <button
           onClick={onOpenNav}
-          className="md:hidden w-7 h-7 rounded flex items-center justify-center text-text-dim hover:text-text hover:bg-bg-hover transition-colors shrink-0"
-          title="打开导航"
+          className="w-7 h-7 rounded flex items-center justify-center text-text-dim hover:text-text hover:bg-bg-hover transition-colors shrink-0"
+          title="切换侧边栏"
         >
           <Menu size={16} />
         </button>
@@ -49,7 +49,7 @@ export function Breadcrumb({
                   isCurrent ? "font-medium text-text" : "text-text-dim hover:text-text hover:bg-bg-hover",
                 ].join(" ")}
               >
-                <Ico size={12} className={c.kind === "space" ? "text-accent" : c.kind === "conversation" ? "text-warning" : "text-text-faint"} />
+                <Ico size={12} className={c.kind === "space" ? "text-accent" : c.kind === "agent" ? "text-warning" : "text-text-faint"} />
                 <span className="whitespace-nowrap">{c.title}</span>
               </button>
             </span>

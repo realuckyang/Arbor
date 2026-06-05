@@ -6,7 +6,20 @@ import * as tree from "../service/tree.js";
 import { listMessages } from "../repo/messages.js";
 import { listCalls } from "../repo/calls.js";
 import { getSettings, saveSettings } from "../repo/settings.js";
+import {
+  gitBranches,
+  gitCheckout,
+  gitCommit,
+  gitDiff,
+  gitDiscard,
+  gitInit,
+  gitRemoteAction,
+  gitStage,
+  gitUnstage,
+  listGitRepositories,
+} from "../repo/git.js";
 import { getProcess, listProcesses, startProcess, stopProcess } from "../processes.js";
+import { pickDirectory } from "../directoryPicker.js";
 
 const parseBody = async (req) => {
   const chunks = [];
@@ -27,7 +40,7 @@ const handleApi = async (req, res) => {
   try {
     if (path === "/health") return json(res, 200, { ok: true });
 
-    // ---- tree(统一树:文件夹 / 对话 / 文件)----
+    // ---- tree(统一树:文件夹 / 智能体 / 文件)----
     if (path === "/api/tree") {
       if (method === "GET") {
         return json(res, 200, { ok: true, items: tree.listChildren(url.searchParams.get("parentId")) });
@@ -60,6 +73,14 @@ const handleApi = async (req, res) => {
     }
 
     // ---- workspaces(root folders)----
+    if (path === "/api/workspaces/pick" && method === "POST") {
+      try {
+        return json(res, 200, { ok: true, path: await pickDirectory() });
+      } catch (error) {
+        return json(res, 400, { ok: false, error: error.message });
+      }
+    }
+
     if (path === "/api/workspaces") {
       if (method === "GET") return json(res, 200, { ok: true, workspaces: tree.listWorkspaces() });
       if (method === "POST") {
@@ -90,7 +111,7 @@ const handleApi = async (req, res) => {
       return json(res, 200, { ok: true, items: tree.listAll() });
     }
 
-    // 标记对话已读
+    // 标记智能体已读
     if (path === "/api/tree/read" && method === "POST") {
       return json(res, 200, { ok: true, item: tree.markRead(url.searchParams.get("id")) });
     }
@@ -124,9 +145,9 @@ const handleApi = async (req, res) => {
       return json(res, 200, { ok: true, ancestry: tree.ancestry(url.searchParams.get("id")) });
     }
 
-    // ---- messages(某个对话的邮箱)----
+    // ---- messages(某个智能体的邮箱)----
     if (path === "/api/messages" && method === "GET") {
-      return json(res, 200, { ok: true, messages: listMessages(url.searchParams.get("conversationId")) });
+      return json(res, 200, { ok: true, messages: listMessages(url.searchParams.get("agentId")) });
     }
 
     // ---- calls ----
@@ -135,6 +156,52 @@ const handleApi = async (req, res) => {
       const calleeId = url.searchParams.get("calleeId") || undefined;
       const status = url.searchParams.get("status") || undefined;
       return json(res, 200, { ok: true, calls: listCalls({ callerId, calleeId, status }) });
+    }
+
+    // ---- git ----
+    if (path === "/api/git/status" && method === "GET") {
+      return json(res, 200, { ok: true, repositories: listGitRepositories() });
+    }
+    if (path === "/api/git/diff" && method === "GET") {
+      return json(res, 200, {
+        ok: true,
+        diff: gitDiff({
+          root: url.searchParams.get("root"),
+          filePath: url.searchParams.get("path"),
+          staged: url.searchParams.get("staged") === "1",
+        }),
+      });
+    }
+    if (path === "/api/git/branches" && method === "GET") {
+      return json(res, 200, { ok: true, ...gitBranches(url.searchParams.get("root")) });
+    }
+    if (path === "/api/git/stage" && method === "POST") {
+      const body = await parseBody(req);
+      return json(res, 200, { ok: true, repository: gitStage(body) });
+    }
+    if (path === "/api/git/unstage" && method === "POST") {
+      const body = await parseBody(req);
+      return json(res, 200, { ok: true, repository: gitUnstage(body) });
+    }
+    if (path === "/api/git/discard" && method === "POST") {
+      const body = await parseBody(req);
+      return json(res, 200, { ok: true, repository: gitDiscard(body) });
+    }
+    if (path === "/api/git/commit" && method === "POST") {
+      const body = await parseBody(req);
+      return json(res, 200, { ok: true, ...gitCommit(body) });
+    }
+    if (path === "/api/git/remote" && method === "POST") {
+      const body = await parseBody(req);
+      return json(res, 200, { ok: true, ...gitRemoteAction(body) });
+    }
+    if (path === "/api/git/checkout" && method === "POST") {
+      const body = await parseBody(req);
+      return json(res, 200, { ok: true, ...gitCheckout(body) });
+    }
+    if (path === "/api/git/init" && method === "POST") {
+      const body = await parseBody(req);
+      return json(res, 200, { ok: true, ...gitInit(body) });
     }
 
     // ---- settings ----

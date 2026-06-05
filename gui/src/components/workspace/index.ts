@@ -1,9 +1,11 @@
 export { EmptyPanel } from "./EmptyPanel";
+export { GitDiffPanel } from "./GitDiffPanel";
 export { ProcessPanel } from "./ProcessPanel";
+export { TerminalPanel } from "./TerminalPanel";
 export { TabBar } from "./TabBar";
 export { TabContent } from "./TabContent";
-export type { ProcessTab, WorkspaceGroupId, WorkspaceGroupState, WorkspaceTab } from "./types";
-export { PROCESS_TAB_ID, isProcessTab, isSpaceTab, processTab } from "./types";
+export type { GitDiffTab, ProcessTab, SettingsTab, TerminalTab, WorkspaceGroupId, WorkspaceGroupState, WorkspaceTab } from "./types";
+export { GIT_DIFF_TAB_PREFIX, PROCESS_TAB_ID, SETTINGS_TAB_ID, TERMINAL_TAB_PREFIX, gitDiffTab, isGitDiffTab, isProcessTab, isSettingsTab, isSpaceTab, isTerminalTab, processTab, settingsTab, terminalTab } from "./types";
 export { useTabGroups } from "./useTabGroups";
 export { WorkspaceGroup } from "./WorkspaceGroup";
 export { WorkspaceLayout } from "./WorkspaceLayout";

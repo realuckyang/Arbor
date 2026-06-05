@@ -17,7 +17,7 @@ export function QuickOpen({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // 只列可打开的(对话/文件);空间只在树里展开,不开标签
+    // 只列可打开的(智能体/文件);空间只在树里展开,不开标签
     api.listAllNodes().then((r) => setAll((r.spaces || []).filter((n) => n.kind !== "space"))).catch(() => setAll([]));
     inputRef.current?.focus();
   }, []);
@@ -55,7 +55,7 @@ export function QuickOpen({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={onKey}
-          placeholder="按名称搜索 对话 / 文件…"
+          placeholder="按名称搜索 智能体 / 文件…"
           className="w-full px-4 py-3 text-[15px] bg-transparent text-text outline-none border-b border-border"
         />
         <div className="max-h-[50vh] overflow-y-auto py-1">

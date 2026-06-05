@@ -1,9 +1,12 @@
-import type { Space } from "../../api";
+import type { Settings, Space } from "../../api";
 import { ChatPanel } from "../chat";
 import { FilePanel } from "../files";
 import { EmptyPanel } from "./EmptyPanel";
+import { GitDiffPanel } from "./GitDiffPanel";
 import { ProcessPanel } from "./ProcessPanel";
-import { isProcessTab, isSpaceTab, type WorkspaceTab } from "./types";
+import { TerminalPanel } from "./TerminalPanel";
+import { SettingsPanel } from "../settings";
+import { isGitDiffTab, isProcessTab, isSettingsTab, isSpaceTab, isTerminalTab, type WorkspaceTab } from "./types";
 
 type Socket = {
   send: (m: any) => void;
@@ -21,7 +24,9 @@ export function TabContent({
   onSelect,
   onOpenNav,
   onOpenSettings,
+  onSettingsSaved,
   onCloseProcess,
+  onCloseTerminal,
 }: {
   tab: WorkspaceTab | null;
   socket: Socket;
@@ -33,15 +38,29 @@ export function TabContent({
   onSelect: (n: Space) => void;
   onOpenNav?: () => void;
   onOpenSettings: () => void;
+  onSettingsSaved?: (settings: Settings) => void;
   onCloseProcess: () => void;
+  onCloseTerminal: () => void;
 }) {
-  if (!tab) return <EmptyPanel onOpenNav={onOpenNav} />;
+  if (!tab) return <EmptyPanel />;
 
   if (isProcessTab(tab)) {
     return <ProcessPanel socket={socket} onClose={onCloseProcess} />;
   }
 
-  if (isSpaceTab(tab) && tab.kind === "conversation") {
+  if (isTerminalTab(tab)) {
+    return <TerminalPanel tab={tab} socket={socket} onClose={onCloseTerminal} />;
+  }
+
+  if (isGitDiffTab(tab)) {
+    return <GitDiffPanel tab={tab} />;
+  }
+
+  if (isSettingsTab(tab)) {
+    return <SettingsPanel onSaved={onSettingsSaved} />;
+  }
+
+  if (isSpaceTab(tab) && tab.kind === "agent") {
     return (
       <ChatPanel
         key={tab.id}
@@ -68,5 +87,5 @@ export function TabContent({
     );
   }
 
-  return <EmptyPanel onOpenNav={onOpenNav} />;
+  return <EmptyPanel />;
 }

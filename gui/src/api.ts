@@ -1,17 +1,17 @@
-// 统一树的一个 item:kind 区分它是空间 / 对话 / 文件。
-// 存储在后端拆成 spaces / conversations / files 三张表,这里合成一棵树。
+// 统一树的一个 item:kind 区分它是空间 / 智能体 / 文件。
+// 存储在后端拆成 spaces / agents / files 三类,这里合成一棵树。
 export type Space = {
   id: string;
   parent_id: string | null;                                      // 所在空间(根 = null)
-  kind: "space" | "conversation" | "file";
+  kind: "space" | "agent" | "file";
   title: string;
-  system: string | null;                                         // 仅 conversation:人格
+  system: string | null;                                         // 仅 agent:人格
   content: string | null;                                        // 仅 file:内容
   position: number | null;
-  last_read_at: string | null;                                   // 仅 conversation
+  last_read_at: string | null;                                   // 仅 agent
   created_at: string;
-  status?: "idle" | "running" | "done" | "error" | "cancelled";  // 仅 conversation,来自最新 call
-  unread?: boolean;                                              // 仅 conversation
+  status?: "idle" | "running" | "done" | "error" | "cancelled";  // 仅 agent,来自最新 call
+  unread?: boolean;                                              // 仅 agent
   size?: number;                                                 // 仅 file:字节数
   binary?: boolean;                                              // 仅 file:二进制,无法当文本预览
   tooLarge?: boolean;                                            // 仅 file:超过文本预览上限
@@ -47,6 +47,7 @@ export type Settings = {
   apiUrl: string;
   apiKey: string;
   model: string;
+  showActivityBar: boolean;
   system: string;
 };
 
@@ -73,6 +74,36 @@ export type WorkspaceRoot = {
   enabled: number;
   created_at: string;
   last_opened_at: string | null;
+};
+
+export type GitFileStatus = {
+  path: string;
+  absPath: string;
+  originalPath: string | null;
+  index: string;
+  worktree: string;
+  status: "untracked" | "staged+modified" | "staged" | "modified" | "changed" | "conflict";
+  renamed: boolean;
+  staged: boolean;
+  unstaged: boolean;
+};
+
+export type GitRepositoryStatus = {
+  workspaceId: string;
+  workspaceTitle: string;
+  workspacePath: string;
+  root: string | null;
+  isRepo: boolean;
+  branch: string | null;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  files: GitFileStatus[];
+};
+
+export type GitBranches = {
+  current: string;
+  branches: string[];
 };
 
 const request = async <T>(path: string, opts: RequestInit = {}) => {
@@ -116,13 +147,14 @@ export const api = {
     request<{ ancestry: Space[] }>(`/api/ancestry?id=${encodeURIComponent(id)}`),
 
   listWorkspaces: () => request<{ workspaces: WorkspaceRoot[] }>("/api/workspaces"),
+  pickWorkspaceDirectory: () => request<{ path: string | null }>("/api/workspaces/pick", { method: "POST" }),
   addWorkspace: (opts: { path: string; title?: string }) =>
     request<{ item: Space }>("/api/workspaces", { method: "POST", ...jsonBody(opts) }).then(one),
   removeWorkspace: (id: string) =>
     request<{ ok: boolean; workspace: WorkspaceRoot | null }>(`/api/workspaces?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
 
-  listMessages: (conversationId: string) =>
-    request<{ messages: Message[] }>(`/api/messages?conversationId=${encodeURIComponent(conversationId)}`),
+  listMessages: (agentId: string) =>
+    request<{ messages: Message[] }>(`/api/messages?agentId=${encodeURIComponent(agentId)}`),
 
   listCalls: (params: { callerId?: string; calleeId?: string; status?: string } = {}) => {
     const qs = new URLSearchParams();
@@ -132,6 +164,26 @@ export const api = {
     const tail = qs.toString() ? `?${qs}` : "";
     return request<{ calls: Call[] }>(`/api/calls${tail}`);
   },
+
+  gitStatus: () => request<{ repositories: GitRepositoryStatus[] }>("/api/git/status"),
+  gitDiff: (opts: { root: string; path: string; staged?: boolean }) =>
+    request<{ diff: string }>(`/api/git/diff?root=${encodeURIComponent(opts.root)}&path=${encodeURIComponent(opts.path)}${opts.staged ? "&staged=1" : ""}`),
+  gitBranches: (root: string) =>
+    request<GitBranches>(`/api/git/branches?root=${encodeURIComponent(root)}`),
+  gitStage: (opts: { root: string; path?: string; all?: boolean }) =>
+    request<{ repository: GitRepositoryStatus }>("/api/git/stage", { method: "POST", ...jsonBody(opts) }),
+  gitUnstage: (opts: { root: string; path?: string; all?: boolean }) =>
+    request<{ repository: GitRepositoryStatus }>("/api/git/unstage", { method: "POST", ...jsonBody(opts) }),
+  gitDiscard: (opts: { root: string; path: string }) =>
+    request<{ repository: GitRepositoryStatus }>("/api/git/discard", { method: "POST", ...jsonBody(opts) }),
+  gitCommit: (opts: { root: string; message: string }) =>
+    request<{ output: string; repository: GitRepositoryStatus }>("/api/git/commit", { method: "POST", ...jsonBody(opts) }),
+  gitRemote: (opts: { root: string; action: "fetch" | "pull" | "push" }) =>
+    request<{ output: string; repository: GitRepositoryStatus }>("/api/git/remote", { method: "POST", ...jsonBody(opts) }),
+  gitCheckout: (opts: { root: string; branch: string; create?: boolean }) =>
+    request<{ output: string; repository: GitRepositoryStatus; branches: GitBranches }>("/api/git/checkout", { method: "POST", ...jsonBody(opts) }),
+  gitInit: (opts: { workspacePath: string }) =>
+    request<{ output: string; repository: GitRepositoryStatus }>("/api/git/init", { method: "POST", ...jsonBody(opts) }),
 
   getSettings: () => request<{ settings: Settings }>("/api/settings"),
   saveSettings: (s: Settings) =>
