@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { Settings } from "../../api";
 import { api } from "../../api";
-import { Check } from "lucide-react";
+import { Check, Settings2 } from "lucide-react";
 
 const emptySettings: Settings = {
   apiUrl: "",
@@ -40,60 +40,61 @@ export function SettingsPanel({ onSaved }: { onSaved?: (settings: Settings) => v
     setForm((current) => ({ ...current, [key]: value }));
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto bg-bg">
-      <div className="mx-auto w-full max-w-4xl px-5 py-6 md:px-8">
-        <div className="mb-5 min-w-0">
-          <h1 className="text-[22px] font-semibold leading-tight text-text">设置</h1>
-          <div className="mt-1 text-[13px] text-text-faint">模型</div>
+    <div className="flex-1 min-h-0 flex flex-col bg-bg">
+      <div className="border-b border-border">
+        <div className="mx-auto flex w-full max-w-4xl items-center gap-2 px-5 md:px-8">
+          <Settings2 size={15} className="text-accent" />
+          <span className="flex-1 min-w-0 py-2 text-[13px] font-semibold text-text">设置</span>
+          <button
+            onClick={saveModel}
+            className={[
+              "my-1.5 inline-flex h-7 shrink-0 items-center justify-center gap-1.5 px-3 text-[12.5px] font-medium transition-colors",
+              saved ? "bg-success/10 text-success" : "bg-accent text-white hover:opacity-90",
+            ].join(" ")}
+          >
+            {saved ? <><Check size={13} /> 已保存</> : "保存"}
+          </button>
         </div>
+      </div>
 
-        <div className="divide-y divide-border">
-          <Field label="API URL">
-            <input
-              className={inputClass}
-              value={form.apiUrl}
-              onChange={(e) => set("apiUrl", e.target.value)}
-              placeholder="https://api.openai.com/v1/chat/completions"
-            />
-          </Field>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="mx-auto w-full max-w-4xl px-5 md:px-8">
+          <div className="divide-y divide-border">
+            <Field label="API URL">
+              <input
+                className={inputClass}
+                value={form.apiUrl}
+                onChange={(e) => set("apiUrl", e.target.value)}
+                placeholder="https://api.openai.com/v1/chat/completions"
+              />
+            </Field>
 
-          <Field label="API Key">
-            <input
-              className={inputClass}
-              type="password"
-              value={form.apiKey}
-              onChange={(e) => set("apiKey", e.target.value)}
-            />
-          </Field>
+            <Field label="API Key">
+              <input
+                className={inputClass}
+                type="password"
+                value={form.apiKey}
+                onChange={(e) => set("apiKey", e.target.value)}
+              />
+            </Field>
 
-          <Field label="Model">
-            <input
-              className={inputClass}
-              value={form.model}
-              onChange={(e) => set("model", e.target.value)}
-              placeholder="gpt-4o / deepseek-chat / ..."
-            />
-          </Field>
+            <Field label="Model">
+              <input
+                className={inputClass}
+                value={form.model}
+                onChange={(e) => set("model", e.target.value)}
+                placeholder="gpt-4o / deepseek-chat / ..."
+              />
+            </Field>
 
-          <Field label="Default System Prompt" alignTop>
-            <textarea
-              className={`${inputClass} min-h-40 resize-y leading-relaxed`}
-              rows={8}
-              value={form.system}
-              onChange={(e) => set("system", e.target.value)}
-            />
-          </Field>
-
-          <div className="flex justify-end py-5">
-            <button
-              onClick={saveModel}
-              className={[
-                "inline-flex shrink-0 items-center justify-center gap-1.5 px-4 py-2 text-[13px] font-medium transition-colors",
-                saved ? "bg-success/10 text-success" : "bg-accent text-white hover:opacity-90",
-              ].join(" ")}
-            >
-              {saved ? <><Check size={13} /> 已保存</> : "保存"}
-            </button>
+            <Field label="Default System Prompt" alignTop>
+              <textarea
+                className={`${inputClass} min-h-40 resize-y leading-relaxed`}
+                rows={8}
+                value={form.system}
+                onChange={(e) => set("system", e.target.value)}
+              />
+            </Field>
           </div>
         </div>
       </div>

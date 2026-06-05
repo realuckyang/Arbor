@@ -360,16 +360,6 @@ export function SpaceTree({
         "divider",
       );
     }
-    if (gitRepo?.root) {
-      items.push(
-        {
-          label: `Git 变更 (${gitRepo.files.length})`,
-          icon: <GitBranch size={13} className="text-accent" />,
-          onClick: () => onOpenGit?.(gitRepo!),
-        },
-        "divider",
-      );
-    }
     // 智能体:复制稳定 uuid(给 call_agent 用);空间/文件:复制相对 workspaces 的干净路径
     const isConv = space.kind === "agent";
     const copyText = isConv ? space.id : space.id.replace(/^.*\/workspaces\//, "");
@@ -380,6 +370,7 @@ export function SpaceTree({
       );
     }
     items.push(
+      { label: "重命名", icon: <Pencil size={13} />, onClick: () => startRename(space) },
       { label: isConv ? "复制 ID" : "复制路径", icon: <Copy size={13} />,
         onClick: async () => {
           try { await navigator.clipboard.writeText(copyText); }
@@ -398,7 +389,18 @@ export function SpaceTree({
       { label: "启动 Claude Code", icon: <Terminal size={13} className="text-success" />,
         onClick: () => onOpenTerminal?.(space, { command: "claude", titlePrefix: "Claude Code" }), disabled: !onOpenTerminal },
       "divider",
-      { label: "重命名", icon: <Pencil size={13} />, onClick: () => startRename(space) },
+    );
+    if (gitRepo?.root) {
+      items.push(
+        {
+          label: `Git 变更 (${gitRepo.files.length})`,
+          icon: <GitBranch size={13} className="text-accent" />,
+          onClick: () => onOpenGit?.(gitRepo!),
+        },
+        "divider",
+      );
+    }
+    items.push(
       { label: space.workspace ? "移除工作区" : "删除", icon: <Trash2 size={13} />, danger: true,
         onClick: async () => {
           if (space.workspace) {

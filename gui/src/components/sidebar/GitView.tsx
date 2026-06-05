@@ -95,38 +95,45 @@ export function GitView({ repoPath, repoTitle, refreshKey = 0, onOpenDiff, onCha
   };
 
   const repos = repositories.filter((repo) => repo.isRepo);
+  const singleRepo = !!repoPath;
+  const panelWidth = singleRepo ? "mx-auto w-full max-w-4xl px-5 md:px-8" : "w-full";
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="flex items-center gap-2 px-3.5 py-2 border-b border-border">
-        <GitBranch size={15} className="text-accent" />
-        <span className="flex-1 min-w-0 text-[13px] font-semibold text-text">{repoTitle || "源代码管理"}</span>
-        <button
-          onClick={load}
-          className="w-6 h-6 flex items-center justify-center text-text-faint hover:text-text hover:bg-bg-hover disabled:opacity-50"
-          disabled={loading || !!busy}
-          title="刷新"
-        >
-          <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
-        </button>
+      <div className="border-b border-border">
+        <div className={["flex items-center gap-2", panelWidth].join(" ")}>
+          <GitBranch size={15} className="text-accent" />
+          <span className="flex-1 min-w-0 text-[13px] font-semibold text-text">{repoTitle || "源代码管理"}</span>
+          <button
+            onClick={load}
+            className="my-2 w-6 h-6 flex items-center justify-center text-text-faint hover:text-text hover:bg-bg-hover disabled:opacity-50"
+            disabled={loading || !!busy}
+            title="刷新"
+          >
+            <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+          </button>
+        </div>
       </div>
 
       {(error || notice) && (
-        <div className={["mx-2 mt-2 px-2 py-1.5 text-[12px]", error ? "bg-danger/10 text-danger" : "bg-success/10 text-success"].join(" ")}>
-          {error || notice}
+        <div className={[singleRepo ? "mx-auto w-full max-w-4xl px-5 md:px-8" : "mx-2", "mt-2"].join(" ")}>
+          <div className={["px-2 py-1.5 text-[12px]", error ? "bg-danger/10 text-danger" : "bg-success/10 text-success"].join(" ")}>
+            {error || notice}
+          </div>
         </div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-y-auto py-1">
+      <div className={["flex-1 min-h-0 overflow-y-auto", singleRepo ? "" : "py-1"].join(" ")}>
         {repos.length === 0 && (
-          <div className="px-4 py-10 text-center text-[13px] text-text-faint">没有 Git 仓库</div>
+          <div className={["px-4 py-10 text-center text-[13px] text-text-faint", panelWidth].join(" ")}>没有 Git 仓库</div>
         )}
         {repos.map((repo) => (
           <RepositoryBlock
             key={`${repo.workspaceId}:${repo.root}`}
             repo={repo}
             busy={busy}
-            expanded={!collapsedByRoot[repo.root || repo.workspaceId]}
+            singleRepo={singleRepo}
+            expanded={singleRepo || !collapsedByRoot[repo.root || repo.workspaceId]}
             commitMessage={messageByRoot[repo.root || ""] || ""}
             branches={repo.root ? branchByRoot[repo.root] : undefined}
             onToggleExpanded={() => {
@@ -147,6 +154,7 @@ export function GitView({ repoPath, repoTitle, refreshKey = 0, onOpenDiff, onCha
 function RepositoryBlock({
   repo,
   busy,
+  singleRepo,
   expanded,
   commitMessage,
   branches,
@@ -158,6 +166,7 @@ function RepositoryBlock({
 }: {
   repo: GitRepositoryStatus;
   busy: string | null;
+  singleRepo?: boolean;
   expanded: boolean;
   commitMessage: string;
   branches?: GitBranches;
@@ -178,6 +187,7 @@ function RepositoryBlock({
   );
   const hasConflict = conflicts.length > 0;
   const disabled = !!busy || !root;
+  const showDetails = singleRepo || expanded;
 
   const doDiscard = (file: GitFileStatus) => {
     if (!confirm(`丢弃「${file.path}」的更改?\n这个操作不可撤销。`)) return;
@@ -218,40 +228,64 @@ function RepositoryBlock({
   };
 
   return (
-    <section className="border-b border-border pb-2 mb-2">
-      <button
-        onClick={onToggleExpanded}
-        className="w-full px-3 py-2 text-left hover:bg-bg-hover"
-        title={expanded ? "收起仓库" : "展开仓库"}
-      >
-        <div className="flex items-center gap-1.5">
-          <ChevronRight
-            size={13}
-            className={[
-              "text-text-faint shrink-0 transition-transform",
-              expanded ? "rotate-90" : "",
-            ].join(" ")}
-          />
-          <GitBranch size={13} className="text-accent shrink-0" />
-          <span className="flex-1 min-w-0 truncate text-[13px] font-semibold text-text">{repo.workspaceTitle}</span>
-          <span className="text-[11px] text-text-faint tabular-nums">{repo.files.length}</span>
-        </div>
-        <div className="mt-1 flex items-center gap-1.5 text-[11px] text-text-faint min-w-0">
+    <section className={singleRepo ? "mx-auto w-full max-w-4xl px-5 py-6 md:px-8" : "border-b border-border pb-2 mb-2"}>
+      {!singleRepo && (
+        <button
+          onClick={onToggleExpanded}
+          className="w-full px-3 py-2 text-left hover:bg-bg-hover"
+          title={expanded ? "收起仓库" : "展开仓库"}
+        >
+          <div className="flex items-center gap-1.5">
+            <ChevronRight
+              size={13}
+              className={[
+                "text-text-faint shrink-0 transition-transform",
+                expanded ? "rotate-90" : "",
+              ].join(" ")}
+            />
+            <GitBranch size={13} className="text-accent shrink-0" />
+            <span className="flex-1 min-w-0 truncate text-[13px] font-semibold text-text">{repo.workspaceTitle}</span>
+            <span className="text-[11px] text-text-faint tabular-nums">{repo.files.length}</span>
+          </div>
+          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-text-faint min-w-0">
+            <button
+              onClick={(e) => { e.stopPropagation(); onLoadBranches(); }}
+              className="truncate hover:text-text"
+              title="分支"
+            >
+              {repo.branch || "HEAD"}
+            </button>
+            {repo.ahead > 0 && <span className="shrink-0">↑{repo.ahead}</span>}
+            {repo.behind > 0 && <span className="shrink-0">↓{repo.behind}</span>}
+            {hasConflict && <span className="shrink-0 text-danger">冲突</span>}
+          </div>
+        </button>
+      )}
+
+      {singleRepo && (
+        <div className="mb-3 flex items-center gap-2">
           <button
-            onClick={(e) => { e.stopPropagation(); onLoadBranches(); }}
-            className="truncate hover:text-text"
+            onClick={onLoadBranches}
+            disabled={disabled}
+            className="h-7 min-w-0 flex items-center gap-1.5 border border-border bg-bg px-2 text-left text-[12px] text-text-dim hover:bg-bg-hover hover:text-text disabled:opacity-50"
             title="分支"
           >
-            {repo.branch || "HEAD"}
+            <GitBranch size={12} className="text-text-faint shrink-0" />
+            <span className="truncate">
+              {repo.branch || "HEAD"}
+            </span>
           </button>
-          {repo.ahead > 0 && <span className="shrink-0">↑{repo.ahead}</span>}
-          {repo.behind > 0 && <span className="shrink-0">↓{repo.behind}</span>}
-          {hasConflict && <span className="shrink-0 text-danger">冲突</span>}
+          <div className="min-w-0 flex-1 flex items-center gap-2 text-[11.5px] text-text-faint">
+            <span className="shrink-0 tabular-nums">{repo.files.length} 个变更</span>
+            {repo.ahead > 0 && <span className="shrink-0">领先 {repo.ahead}</span>}
+            {repo.behind > 0 && <span className="shrink-0">落后 {repo.behind}</span>}
+            {hasConflict && <span className="shrink-0 text-danger">冲突</span>}
+          </div>
         </div>
-      </button>
+      )}
 
-      {expanded && branches && (
-        <div className="mx-2 mb-2 border border-border bg-bg">
+      {showDetails && branches && (
+        <div className={["mb-2 border border-border bg-bg", singleRepo ? "" : "mx-2"].join(" ")}>
           <div className="max-h-32 overflow-y-auto py-1">
             {branches.branches.map((branch) => (
               <button
@@ -269,9 +303,9 @@ function RepositoryBlock({
         </div>
       )}
 
-      {expanded && (
+      {showDetails && (
         <>
-          <div className="px-2 pb-2">
+          <div className={singleRepo ? "pb-3" : "px-2 pb-2"}>
             <textarea
               value={commitMessage}
               onChange={(e) => onMessageChange(e.target.value)}
@@ -279,20 +313,25 @@ function RepositoryBlock({
               rows={3}
               className="w-full resize-none border border-border bg-bg px-2 py-1.5 text-[12.5px] text-text outline-none focus:border-accent"
             />
-            <button
-              onClick={() => onRun("commit", async () => {
-                const result = await api.gitCommit({ root, message: commitMessage });
-                onMessageChange("");
-                return result;
-              })}
-              disabled={disabled || !commitMessage.trim() || staged.length === 0 || hasConflict}
-              className="mt-1.5 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-[12.5px] bg-accent text-white hover:opacity-90 disabled:opacity-40"
-            >
-              <GitCommitHorizontal size={13} /> 提交
-            </button>
+            <div className="mt-1.5 flex items-center gap-2">
+              <span className="flex-1 min-w-0 text-[11.5px] text-text-faint">
+                {staged.length ? `已暂存 ${staged.length} 项` : "暂存后提交"}
+              </span>
+              <button
+                onClick={() => onRun("commit", async () => {
+                  const result = await api.gitCommit({ root, message: commitMessage });
+                  onMessageChange("");
+                  return result;
+                })}
+                disabled={disabled || !commitMessage.trim() || staged.length === 0 || hasConflict}
+                className="h-7 flex items-center justify-center gap-1.5 px-3 text-[12.5px] bg-accent text-white hover:opacity-90 disabled:opacity-40"
+              >
+                <GitCommitHorizontal size={13} /> 提交
+              </button>
+            </div>
           </div>
 
-          <div className="px-2 pb-2 grid grid-cols-3 gap-1">
+          <div className={singleRepo ? "pb-3 flex items-center gap-1.5" : "px-2 pb-2 grid grid-cols-3 gap-1"}>
             <GitAction label="Fetch" icon={<RefreshCw size={12} />} disabled={disabled} onClick={() => onRun("fetch", () => api.gitRemote({ root, action: "fetch" }))} />
             <GitAction label="Pull" icon={<GitPullRequest size={12} />} disabled={disabled} onClick={() => onRun("pull", () => api.gitRemote({ root, action: "pull" }))} />
             <GitAction label="Push" icon={<UploadCloud size={12} />} disabled={disabled} onClick={() => onRun("push", () => api.gitRemote({ root, action: "push" }))} />
