@@ -12,5 +12,5 @@
     "allowJs": true,
     "types": ["node"]
   },
-  "include": ["index.ts", "server", "gui/src"]
+  "include": ["index.ts", "server", "ui/src"]
 }

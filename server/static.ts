@@ -4,7 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DIST = path.resolve(__dirname, "../gui/dist");
+const DIST = path.resolve(__dirname, "../ui/dist");
 
 const MIME = {
   ".html": "text/html; charset=utf-8",

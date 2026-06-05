@@ -7,8 +7,8 @@
     "postinstall": "node ./scripts/fix-node-pty-permissions.mjs",
     "start": "tsx ./index.ts",
     "dev": "tsx watch ./index.ts",
-    "gui": "vite --config gui/vite.config.ts gui",
-    "build": "vite --config gui/vite.config.ts build gui",
+    "ui": "vite --config ui/vite.config.ts ui",
+    "build": "vite --config ui/vite.config.ts build ui",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

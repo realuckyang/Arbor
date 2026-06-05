@@ -84,10 +84,10 @@ npm install
 
 # 开发(两个进程)
 npm run dev          # 后端,tsx watch,端口 9506
-npm run gui          # 前端,vite dev,端口 5174(代理到 9506)
+npm run ui          # 前端,vite dev,端口 5174(代理到 9506)
 
 # 生产(构建 GUI,单端口运行)
-npm run build        # vite build → gui/dist
+npm run build        # vite build → ui/dist
 npm start            # 后端 + GUI 同端口 http://localhost:9506
 ```
 
@@ -112,7 +112,7 @@ server/
 ├── repo/         💾 纯数据访问——tree.ts(文件系统即树)/ messages / calls / settings / search
 ├── api/          🌐 HTTP(很薄,只解析请求、拼响应,业务交给 service)
 └── realtime.ts   📡 WebSocket(send / stop / 广播)
-gui/src/components/   React 前端,按 UI 区域分模块:explorer(树)/ workspace(编辑器外壳 + panels)/ command / chat / files / settings / ui
+ui/src/components/   React 前端,按 UI 区域分模块:explorer(树)/ workspace(编辑器外壳 + panels)/ command / chat / files / settings / ui
 ```
 
 `agent/` 不知道树是什么,只接收组装好的消息和 `ctx`(含工作目录 cwd)运行 LLM 循环;状态全在 `service` / `repo`。一万行出头,可以完整读完。

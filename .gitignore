@@ -3,7 +3,7 @@ node_modules/
 .pnpm-store/
 
 # ─── 构建产物 ───
-gui/dist/
+ui/dist/
 dist/
 build/
 *.tsbuildinfo
