@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, type ManagedProcess } from "../../api";
+import { api, type ManagedProcess } from "../../../api";
 import { ExternalLink, MonitorPlay, RefreshCw, RotateCw, Square, Terminal, X } from "lucide-react";
 
 type Socket = { on: (t: string, fn: (p: any) => void) => () => void };

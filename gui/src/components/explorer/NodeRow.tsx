@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Space } from "../../api";
+import type { Node } from "../../api";
 import { api } from "../../api";
 import { ChevronRight, Folder, FileText, Bot, FileCode, FileJson, Image, Hash, FileType } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
@@ -12,7 +12,7 @@ export type TreeControls = {
   setExpanded: (id: string, on: boolean) => void;
   // 创建
   creatingUnder: string | null;
-  creatingKind: Space["kind"];
+  creatingKind: Node["kind"];
   draftTitle: string;
   setDraftTitle: (s: string) => void;
   commitCreate: () => void;
@@ -23,7 +23,7 @@ export type TreeControls = {
   setRenameDraft: (s: string) => void;
   commitRename: () => void;
   cancelRename: () => void;
-  // dnd-kit:外部告诉 SpaceRow 当前哪个 spaceId 被 hover 以及 drop 位置
+  // dnd-kit:外部告诉 NodeRow 当前哪个 nodeId 被 hover 以及 drop 位置
   activeId: string | null;
   overNodeId: string | null;
   dropPos: DropPosition | null;
@@ -41,13 +41,13 @@ const fileIconFor = (title: string) => {
   return FileText;
 };
 
-const iconFor = (kind: Space["kind"], title?: string) =>
+const iconFor = (kind: Node["kind"], title?: string) =>
   kind === "space" ? Folder : kind === "agent" ? Bot : title ? fileIconFor(title) : FileText;
-const colorFor = (kind: Space["kind"]) =>
+const colorFor = (kind: Node["kind"]) =>
   kind === "space" ? "text-accent" : kind === "agent" ? "text-warning" : "text-text-faint";
 
-export function SpaceRow({
-  space,
+export function NodeRow({
+  node,
   selectedId,
   onSelect,
   onContextMenu,
@@ -55,58 +55,58 @@ export function SpaceRow({
   controls,
   depth = 0,
 }: {
-  space: Space;
+  node: Node;
   selectedId: string;
-  onSelect: (n: Space) => void;
-  onContextMenu: (e: React.MouseEvent, n: Space) => void;
+  onSelect: (n: Node) => void;
+  onContextMenu: (e: React.MouseEvent, n: Node) => void;
   refreshKey: number;
   controls: TreeControls;
   depth?: number;
 }) {
-  const [children, setChildren] = useState<Space[]>([]);
+  const [children, setChildren] = useState<Node[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  const isContainer = space.kind === "space";
-  const expanded = controls.expandedIds.has(space.id);
-  const isRenaming = controls.renamingId === space.id;
-  const isDragging = controls.activeId === space.id;
-  const dragDisabled = isRenaming || !!space.workspace;
+  const isContainer = node.kind === "space";
+  const expanded = controls.expandedIds.has(node.id);
+  const isRenaming = controls.renamingId === node.id;
+  const isDragging = controls.activeId === node.id;
+  const dragDisabled = isRenaming || !!node.workspace;
 
   // dnd-kit
   const {
     attributes,
     listeners,
     setNodeRef: setDragRef,
-  } = useDraggable({ id: space.id, data: { space }, disabled: dragDisabled });
-  const { setNodeRef: setDropRef } = useDroppable({ id: space.id, data: { space } });
+  } = useDraggable({ id: node.id, data: { node }, disabled: dragDisabled });
+  const { setNodeRef: setDropRef } = useDroppable({ id: node.id, data: { node } });
   const setRef = useCallback(
     (el: HTMLDivElement | null) => { setDragRef(el); setDropRef(el); },
     [setDragRef, setDropRef],
   );
 
-  const isOver = controls.overNodeId === space.id;
+  const isOver = controls.overNodeId === node.id;
   const dropPos = isOver ? controls.dropPos : null;
 
   const loadChildren = useCallback(async () => {
     if (!isContainer) return;
-    const result = await api.listChildren(space.id);
-    setChildren(result.spaces || []);
+    const result = await api.listChildren(node.id);
+    setChildren(result.nodes || []);
     setLoaded(true);
-  }, [space.id, isContainer]);
+  }, [node.id, isContainer]);
 
   useEffect(() => { if (expanded && !loaded) loadChildren(); }, [expanded, loaded, loadChildren]);
   useEffect(() => { if (loaded || expanded) loadChildren(); }, [refreshKey]);
 
   const toggle = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isContainer) controls.toggleExpand(space.id);
+    if (isContainer) controls.toggleExpand(node.id);
   };
 
-  const isSelected = selectedId === space.id;
-  const Icon = iconFor(space.kind, space.title);
-  const iconColor = colorFor(space.kind);
+  const isSelected = selectedId === node.id;
+  const Icon = iconFor(node.kind, node.title);
+  const iconColor = colorFor(node.kind);
 
-  const showInputHere = isContainer && controls.creatingUnder === space.id;
+  const showInputHere = isContainer && controls.creatingUnder === node.id;
 
   return (
     <div>
@@ -128,10 +128,10 @@ export function SpaceRow({
         tabIndex={dragDisabled ? 0 : undefined}
         onClick={() => {
           if (isRenaming) return;
-          onSelect(space);
-          if (isContainer) controls.toggleExpand(space.id);
+          onSelect(node);
+          if (isContainer) controls.toggleExpand(node.id);
         }}
-        onContextMenu={(e) => onContextMenu(e, space)}
+        onContextMenu={(e) => onContextMenu(e, node)}
         className={[
           "group relative flex items-center gap-1.5 py-[3px] pr-2 cursor-pointer select-none text-text touch-none",
           isSelected && !isRenaming ? "bg-bg-inset" : "hover:bg-bg-hover",
@@ -168,15 +168,15 @@ export function SpaceRow({
             className="flex-1 min-w-0 bg-white border border-accent rounded px-1 -mx-1 py-px text-[14px] text-text outline-none"
           />
         ) : (
-          <span className="flex-1 min-w-0 truncate text-[14.5px]">{space.title}</span>
+          <span className="flex-1 min-w-0 truncate text-[14.5px]">{node.title}</span>
         )}
 
-        {space.kind === "agent" && <AgentStatusDot status={space.status} unread={space.unread} />}
+        {node.kind === "agent" && <AgentStatusDot status={node.status} unread={node.unread} />}
 
         {/* 更多操作:桌面 hover / 移动端常驻。快速点弹菜单,不与按住拖拽冲突 */}
         <button
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); onContextMenu(e, space); }}
+          onClick={(e) => { e.stopPropagation(); onContextMenu(e, node); }}
           className="shrink-0 w-5 h-5 rounded flex items-center justify-center text-text-faint hover:text-text hover:bg-bg-inset opacity-0 group-hover:opacity-100 max-md:opacity-60"
           title="更多操作"
         >
@@ -198,9 +198,9 @@ export function SpaceRow({
         <div>
           {showInputHere && <InlineCreateRow depth={depth + 1} controls={controls} />}
           {children.map((child) => (
-            <SpaceRow
+            <NodeRow
               key={child.id}
-              space={child}
+              node={child}
               selectedId={selectedId}
               onSelect={onSelect}
               onContextMenu={onContextMenu}

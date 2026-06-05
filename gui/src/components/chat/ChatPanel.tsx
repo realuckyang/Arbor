@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Space, Message } from "../../api";
+import type { Node, Message } from "../../api";
 import { api } from "../../api";
 import { Send, Square, Bot, PhoneCall, Sparkles, Settings } from "lucide-react";
 import { renderMarkdown } from "../../lib/markdown";
 import { ToolBlock, type ToolPair } from "./ToolBlock";
 
 export function ChatPanel({
-  space,
+  node,
   onSelect,
   socket,
   onOpenNav,
   onOpenSettings,
 }: {
-  space: Space;
-  onSelect: (n: Space) => void;
+  node: Node;
+  onSelect: (n: Node) => void;
   socket: { send: (m: any) => void; on: (t: string, fn: (p: any) => void) => () => void };
   onOpenNav?: () => void;
   onOpenSettings?: () => void;
@@ -32,24 +32,24 @@ export function ChatPanel({
     api.getSettings()
       .then((r) => { const s = r.settings || ({} as any); setConfigured(!!(s.model && s.apiUrl)); })
       .catch(() => {});
-  }, [space.id]);
+  }, [node.id]);
 
   const loadMessages = useCallback(async () => {
-    const result = await api.listMessages(space.id);
+    const result = await api.listMessages(node.id);
     setMessages(result.messages || []);
-  }, [space.id]);
+  }, [node.id]);
 
   // 切到这个 agent → 立即 mark-read
   useEffect(() => {
     setMessages([]);
     setStreaming("");
     loadMessages();
-    api.markSpaceRead(space.id).catch(() => {});
-  }, [space.id, loadMessages]);
+    api.markNodeRead(node.id).catch(() => {});
+  }, [node.id, loadMessages]);
 
   useEffect(() => {
-    socket.send({ type: "subscribe", agentId: space.id });
-    const matchesAgent = (p: any) => p.agentId === space.id;
+    socket.send({ type: "subscribe", agentId: node.id });
+    const matchesAgent = (p: any) => p.agentId === node.id;
     const offDelta = socket.on("delta", (p: any) => {
       if (!matchesAgent(p)) return;
       if (p.content) setStreaming((prev) => prev + p.content);
@@ -58,14 +58,14 @@ export function ChatPanel({
       if (!matchesAgent(p)) return;
       setStreaming("");                                     // 完整消息到了,清空流式 buffer
       setMessages((prev) => [...prev, p.message]);
-      api.markSpaceRead(space.id).catch(() => {});
+      api.markNodeRead(node.id).catch(() => {});
     });
     const offEnd = socket.on("end", (p: any) => {
       if (!matchesAgent(p)) return;
       setSending(false);
       setStreaming("");
       loadMessages();
-      api.markSpaceRead(space.id).catch(() => {});
+      api.markNodeRead(node.id).catch(() => {});
     });
     const offErr = socket.on("error", (p: any) => {
       if (!matchesAgent(p)) return;
@@ -74,9 +74,9 @@ export function ChatPanel({
     });
     return () => {
       offDelta(); offMsg(); offEnd(); offErr();
-      socket.send({ type: "unsubscribe", agentId: space.id });
+      socket.send({ type: "unsubscribe", agentId: node.id });
     };
-  }, [space.id, socket, loadMessages]);
+  }, [node.id, socket, loadMessages]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -95,7 +95,7 @@ export function ChatPanel({
     if (!configured) { onOpenSettings?.(); return; } // 没配模型:引导去设置,不空发
     setSending(true);
     setPrompt("");
-    socket.send({ type: "send", agentId: space.id, prompt: text });
+    socket.send({ type: "send", agentId: node.id, prompt: text });
   };
 
   return (
@@ -159,7 +159,7 @@ export function ChatPanel({
           />
           {sending ? (
             <button
-              onClick={() => socket.send({ type: "stop", agentId: space.id })}
+              onClick={() => socket.send({ type: "stop", agentId: node.id })}
               className="w-8 h-8 rounded flex items-center justify-center text-text-faint hover:text-danger hover:bg-bg-hover transition-colors shrink-0"
             >
               <Square size={14} />

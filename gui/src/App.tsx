@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSocket } from "./ws";
-import { api, type GitRepositoryStatus, type Space } from "./api";
+import { api, type GitRepositoryStatus, type Node } from "./api";
 import { QuickOpen, CommandPalette, type Command } from "./components/command";
-import { SpaceTree } from "./components/explorer";
-import { WorkspaceLayout, isSettingsTab, isSpaceTab, useTabGroups } from "./components/workspace";
+import { NodeTree } from "./components/explorer";
+import { WorkspaceLayout, isSettingsTab, isNodeTab, useTabGroups } from "./components/workspace";
 import { FileText, Folder, FolderPlus, Bot, Search, Settings as SettingsIcon, X, MonitorPlay, PanelRight } from "lucide-react";
 import type { ManagedProcess } from "./api";
 
@@ -19,7 +19,7 @@ export function App() {
   const [fileRefreshKeys, setFileRefreshKeys] = useState<Record<string, number>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
-  const [selectedNode, setSelectedNode] = useState<Space | null>(null);
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
 
   const onFileSaved = (id: string) => {
     setDirtyIds((s) => { const n = new Set(s); n.delete(id); return n; });
@@ -43,19 +43,19 @@ export function App() {
   const autoOpenedProcessesRef = useRef<Set<string>>(new Set());
   allTabsRef.current = tabGroups.allTabs;
   dirtyRef.current = dirtyIds;
-  const activeSpace = tabGroups.activeSpace;
-  const openNode = (n: Space | null, opts: { preview?: boolean; side?: boolean; groupId?: "main" | "side" } = {}) => {
+  const activeNode = tabGroups.activeNode;
+  const openNode = (n: Node | null, opts: { preview?: boolean; side?: boolean; groupId?: "main" | "side" } = {}) => {
     setSelectedNode(n);
     tabGroups.openNode(n, opts);
   };
   const currentCreateParentId = () => {
-    const node = selectedNode || activeSpace;
+    const node = selectedNode || activeNode;
     if (!node) return null;
     return node.kind === "space" ? node.id : node.parent_id;
   };
-  const openTerminal = (n: Space, opts: { command?: string; titlePrefix?: string } = {}) => {
+  const openTerminal = (n: Node, opts: { command?: string; titlePrefix?: string } = {}) => {
     setSelectedNode(n);
-    const cwdHint = n.kind === "space" ? n.id : n.id;
+    const cwdHint = n.id;
     const name = n.kind === "space" ? n.title : n.parent_id?.split("/").filter(Boolean).pop() || n.title;
     const title = `${opts.titlePrefix || "Terminal"}: ${name}`;
     tabGroups.openTerminal(cwdHint, title, { command: opts.command });
@@ -88,7 +88,7 @@ export function App() {
         let changed = false;
         const next = { ...prev };
         for (const t of allTabsRef.current) {
-          if (!isSpaceTab(t)) continue;
+          if (!isNodeTab(t)) continue;
           if (t.kind !== "file" || dirtyRef.current.has(t.id)) continue;
           next[t.id] = (next[t.id] || 0) + 1;
           changed = true;
@@ -96,13 +96,13 @@ export function App() {
         return changed ? next : prev;
       });
       if (p?.item) {
-        tabGroups.updateSpaceTab(p.item.id, p.item);
+        tabGroups.updateNodeTab(p.item.id, p.item);
       } else if (p?.reason === "deleted" && p?.id) {
-        tabGroups.removeSpaceTab(p.id);
+        tabGroups.removeNodeTab(p.id);
       }
     });
     return off;
-  }, [refreshGit, socket, tabGroups.removeSpaceTab, tabGroups.updateSpaceTab]);
+  }, [refreshGit, socket, tabGroups.removeNodeTab, tabGroups.updateNodeTab]);
 
   // 后台进程:用于预览面板入口和自动打开第一条可预览服务
   useEffect(() => {
@@ -130,18 +130,18 @@ export function App() {
 
   // 刷新打开的智能体标签的状态点(运行中/未读)
   useEffect(() => {
-    const agentTabs = allTabsRef.current.filter((t) => isSpaceTab(t) && t.kind === "agent");
+    const agentTabs = allTabsRef.current.filter((t) => isNodeTab(t) && t.kind === "agent");
     if (!agentTabs.length) return;
     let cancelled = false;
-    Promise.all(agentTabs.map((t) => api.getSpace(t.id).then((r) => r.space).catch(() => null)))
+    Promise.all(agentTabs.map((t) => api.getNode(t.id).then((r) => r.node).catch(() => null)))
       .then((items) => {
         if (cancelled) return;
         for (const item of items) {
-          if (item) tabGroups.updateSpaceTab(item.id, item);
+          if (item) tabGroups.updateNodeTab(item.id, item);
         }
       });
     return () => { cancelled = true; };
-  }, [treeRefresh, tabGroups.updateSpaceTab]);
+  }, [treeRefresh, tabGroups.updateNodeTab]);
 
   // 全局快捷键:⌘P 快开 / ⌘⇧P 命令面板
   useEffect(() => {
@@ -157,13 +157,13 @@ export function App() {
   }, []);
 
   // 在当前选中工作区/文件夹里新建(命令面板用,名字走 prompt)
-  const createAtCurrentTarget = async (kind: Space["kind"]) => {
+  const createAtCurrentTarget = async (kind: Node["kind"]) => {
     const title = window.prompt(`新建${kind === "space" ? "文件夹" : kind === "agent" ? "智能体" : "文件"}的名字:`);
     if (!title || !title.trim()) return;
     try {
       const parentId = currentCreateParentId() || undefined;
-      const r = await api.createSpace({ kind, title: title.trim(), parentId });
-      openNode(r.space);
+      const r = await api.createNode({ kind, title: title.trim(), parentId });
+      openNode(r.node);
       setTreeRefresh((n) => n + 1);
     } catch (e: any) {
       alert(e.message || "新建失败");
@@ -216,8 +216,8 @@ export function App() {
 
   return (
     <div className="h-screen flex overflow-hidden bg-bg text-text font-sans relative">
-      <SpaceTree
-        selectedId={selectedNode?.id || activeSpace?.id || ""}
+      <NodeTree
+        selectedId={selectedNode?.id || activeNode?.id || ""}
         onSelect={openNode}
         onOpenSide={(n) => openNode(n, { groupId: "side" })}
         onOpenTerminal={openTerminal}

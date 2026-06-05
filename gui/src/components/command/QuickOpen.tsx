@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, type Space } from "../../api";
-import { iconFor, colorFor } from "../explorer/SpaceRow";
+import { api, type Node } from "../../api";
+import { iconFor, colorFor } from "../explorer/NodeRow";
 import { fuzzy } from "../../lib/fuzzy";
 
 // 快速打开(⌘P):模糊搜索整棵树,回车打开
@@ -8,31 +8,31 @@ export function QuickOpen({
   onPick,
   onClose,
 }: {
-  onPick: (n: Space) => void;
+  onPick: (n: Node) => void;
   onClose: () => void;
 }) {
-  const [all, setAll] = useState<Space[]>([]);
+  const [all, setAll] = useState<Node[]>([]);
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     // 只列可打开的(智能体/文件);空间只在树里展开,不开标签
-    api.listAllNodes().then((r) => setAll((r.spaces || []).filter((n) => n.kind !== "space"))).catch(() => setAll([]));
+    api.listAllNodes().then((r) => setAll((r.nodes || []).filter((n) => n.kind !== "space"))).catch(() => setAll([]));
     inputRef.current?.focus();
   }, []);
 
   const results = useMemo(() => {
     const scored = all
       .map((n) => ({ n, s: fuzzy(q, n.title) }))
-      .filter((x) => x.s !== null) as { n: Space; s: number }[];
+      .filter((x) => x.s !== null) as { n: Node; s: number }[];
     scored.sort((a, b) => b.s - a.s || a.n.title.localeCompare(b.n.title));
     return scored.slice(0, 50).map((x) => x.n);
   }, [all, q]);
 
   useEffect(() => { setSel(0); }, [q]);
 
-  const choose = (n?: Space) => {
+  const choose = (n?: Node) => {
     const target = n || results[sel];
     if (target) { onPick(target); onClose(); }
   };

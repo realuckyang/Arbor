@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { iconFor, colorFor } from "../explorer/SpaceRow";
+import { iconFor, colorFor } from "../explorer/NodeRow";
 import { X, Menu, Circle, GitBranch, GitCompare, MonitorPlay, PanelRight, Settings, Terminal } from "lucide-react";
 import { ContextMenu, type MenuItem } from "../ui";
 import type { WorkspaceGroupId, WorkspaceTab } from "./types";

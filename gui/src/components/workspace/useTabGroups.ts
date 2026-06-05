@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { Space } from "../../api";
+import type { Node } from "../../api";
 import {
   isOpenableSpace,
-  isSpaceTab,
+  isNodeTab,
   gitTab,
   gitDiffTab,
   processTab,
@@ -95,12 +95,12 @@ export function useTabGroups({ canCloseTab = () => true, onTabClosed = () => {} 
     if (targetId === "side") setSideOpen(true);
     setGroups((prev) => ({
       ...prev,
-      [targetId]: upsertTab(prev[targetId], tab, !!opts.preview && isSpaceTab(tab) && tab.kind === "file"),
+      [targetId]: upsertTab(prev[targetId], tab, !!opts.preview && isNodeTab(tab) && tab.kind === "file"),
     }));
     setActiveGroupId(targetId);
   }, []);
 
-  const openNode = useCallback((node: Space | null, opts: { groupId?: WorkspaceGroupId; side?: boolean; preview?: boolean } = {}) => {
+  const openNode = useCallback((node: Node | null, opts: { groupId?: WorkspaceGroupId; side?: boolean; preview?: boolean } = {}) => {
     if (!isOpenableSpace(node)) return;
     openTab(node, opts);
   }, [openTab]);
@@ -216,20 +216,20 @@ export function useTabGroups({ canCloseTab = () => true, onTabClosed = () => {} 
     closeTabs(groupId, group.tabs.map((tab) => tab.id));
   }, [closeTabs]);
 
-  const updateSpaceTab = useCallback((id: string, patch: Space) => {
+  const updateNodeTab = useCallback((id: string, patch: Node) => {
     setGroups((prev) => {
       const next = { ...prev };
       for (const groupId of groupOrder) {
         next[groupId] = {
           ...next[groupId],
-          tabs: next[groupId].tabs.map((tab) => (tab.id === id && isSpaceTab(tab) ? { ...tab, ...patch } : tab)),
+          tabs: next[groupId].tabs.map((tab) => (tab.id === id && isNodeTab(tab) ? { ...tab, ...patch } : tab)),
         };
       }
       return next;
     });
   }, []);
 
-  const removeSpaceTab = useCallback((id: string) => {
+  const removeNodeTab = useCallback((id: string) => {
     for (const groupId of groupOrder) closeTab(groupId, id);
   }, [closeTab]);
 
@@ -263,7 +263,7 @@ export function useTabGroups({ canCloseTab = () => true, onTabClosed = () => {} 
     activeGroupId,
     activeGroup,
     activeTab,
-    activeSpace: isSpaceTab(activeTab) ? activeTab : null,
+    activeNode: isNodeTab(activeTab) ? activeTab : null,
     focusGroup,
     toggleSideGroup,
     openNode,
@@ -280,8 +280,8 @@ export function useTabGroups({ canCloseTab = () => true, onTabClosed = () => {} 
     closeOthers,
     closeToRight,
     closeGroup,
-    updateSpaceTab,
-    removeSpaceTab,
+    updateNodeTab,
+    removeNodeTab,
     pinPreviewTab,
     closeAll,
     processTabId: PROCESS_TAB_ID,

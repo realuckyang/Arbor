@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Copy, GitCompare, Minus, Plus, RefreshCw, RotateCcw } from "lucide-react";
-import { api, type GitFileStatus } from "../../api";
-import type { GitDiffTab } from "./types";
+import { api, type GitFileStatus } from "../../../api";
+import type { GitDiffTab } from "../types";
 
 type GitDiffPanelProps = {
   tab: GitDiffTab;

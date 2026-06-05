@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Space } from "../../api";
+import type { Node } from "../../api";
 import { api } from "../../api";
 import { CodeEditor } from "./CodeEditor";
 import { renderMarkdown } from "../../lib/markdown";
@@ -16,45 +16,45 @@ function fmtSize(n?: number) {
 
 // 按文件类型预览:图片 / PDF / Markdown 渲染 / 文本代码;二进制或超大文件给"无法预览"卡片。
 export function FilePanel({
-  space,
+  node,
   draft,
   refreshKey = 0,
   gotoLine,
   onChange,
   onSaved,
 }: {
-  space: Space;
+  node: Node;
   draft?: string;
   refreshKey?: number;
   gotoLine?: number;
   onChange: (value: string) => void;
   onSaved: () => void;
 }) {
-  const ext = (space.title.split(".").pop() || "").toLowerCase();
+  const ext = (node.title.split(".").pop() || "").toLowerCase();
   const isImage = IMAGE_EXT.has(ext);
   const isPdf = ext === "pdf";
   const isMarkdown = ext === "md" || ext === "markdown";
-  const rawUrl = `/api/file/raw?id=${encodeURIComponent(space.id)}&v=${refreshKey}`;
+  const rawUrl = `/api/file/raw?id=${encodeURIComponent(node.id)}&v=${refreshKey}`;
 
   const [mdMode, setMdMode] = useState<"preview" | "edit">("preview");
   const [content, setContent] = useState<string>(draft ?? "");
   const [loaded, setLoaded] = useState(draft != null);
   const [info, setInfo] = useState<{ binary: boolean; tooLarge: boolean; size?: number }>({
-    binary: false, tooLarge: false, size: space.size,
+    binary: false, tooLarge: false, size: node.size,
   });
   const latest = useRef(content);
 
-  useEffect(() => { setMdMode("preview"); }, [space.id]);
+  useEffect(() => { setMdMode("preview"); }, [node.id]);
 
   useEffect(() => {
     if (isImage || isPdf) return; // 二进制类按扩展名直接走专用预览,不读文本
     let cancelled = false;
     if (draft != null) { setContent(draft); latest.current = draft; setInfo({ binary: false, tooLarge: false }); setLoaded(true); return; }
     setLoaded(false);
-    api.getSpace(space.id)
+    api.getNode(node.id)
       .then((r) => {
         if (cancelled) return;
-        const n = r.space;
+        const n = r.node;
         setInfo({ binary: !!n.binary, tooLarge: !!n.tooLarge, size: n.size });
         const c = n.content ?? "";
         setContent(c); latest.current = c; setLoaded(true);
@@ -62,10 +62,10 @@ export function FilePanel({
       .catch(() => { if (!cancelled) { setContent(""); latest.current = ""; setLoaded(true); } });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [space.id, refreshKey]);
+  }, [node.id, refreshKey]);
 
   const save = async () => {
-    await api.updateNode(space.id, { content: latest.current });
+    await api.updateNode(node.id, { content: latest.current });
     onSaved();
   };
 
@@ -73,14 +73,14 @@ export function FilePanel({
   if (isImage) {
     return (
       <div className="flex-1 min-h-0 overflow-auto bg-bg-inset flex items-center justify-center p-6">
-        <img src={rawUrl} alt={space.title} className="max-w-full max-h-full object-contain rounded shadow-lg shadow-black/10" />
+        <img src={rawUrl} alt={node.title} className="max-w-full max-h-full object-contain rounded shadow-lg shadow-black/10" />
       </div>
     );
   }
 
   // PDF
   if (isPdf) {
-    return <iframe src={rawUrl} title={space.title} className="flex-1 min-h-0 w-full border-0 bg-bg-inset" />;
+    return <iframe src={rawUrl} title={node.title} className="flex-1 min-h-0 w-full border-0 bg-bg-inset" />;
   }
 
   if (!loaded) return <div className="flex-1 min-h-0 bg-bg" />;
@@ -91,7 +91,7 @@ export function FilePanel({
       <div className="flex-1 min-h-0 flex items-center justify-center bg-bg-inset">
         <div className="text-center px-6">
           <FileQuestion className="mx-auto mb-3 text-text-faint" size={40} />
-          <div className="text-[15px] text-text mb-1">{space.title}</div>
+          <div className="text-[15px] text-text mb-1">{node.title}</div>
           <div className="text-[13px] text-text-faint">
             {info.tooLarge ? "文件过大,不在此预览" : "二进制文件,无法预览"}
             {info.size != null ? ` · ${fmtSize(info.size)}` : ""}
@@ -103,9 +103,9 @@ export function FilePanel({
 
   const editor = (
     <CodeEditor
-      docKey={`${space.id}:${refreshKey}`}
+      docKey={`${node.id}:${refreshKey}`}
       initialValue={content}
-      filename={space.title}
+      filename={node.title}
       gotoLine={gotoLine}
       onChange={(v) => { latest.current = v; setContent(v); onChange(v); }}
       onSave={save}

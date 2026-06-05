@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Check, ChevronRight, Copy, GitBranch, GitCommitHorizontal, GitCompare, GitPullRequest, Minus, Plus, RefreshCw, RotateCcw, UploadCloud } from "lucide-react";
-import { api, type GitBranches, type GitFileStatus, type GitRepositoryStatus } from "../../api";
-import { ContextMenu, type MenuItem } from "../ui";
+import { api, type GitBranches, type GitFileStatus, type GitRepositoryStatus } from "../../../api";
+import { ContextMenu, type MenuItem } from "../../ui";
 
 const statusText: Record<GitFileStatus["status"], string> = {
   untracked: "U",

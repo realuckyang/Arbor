@@ -1,26 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { GitRepositoryStatus, Space } from "../../api";
+import type { GitRepositoryStatus, Node } from "../../api";
 import { api } from "../../api";
-import { SpaceRow, InlineCreateRow, iconFor, colorFor, type TreeControls, type DropPosition } from "./SpaceRow";
+import { NodeRow, InlineCreateRow, iconFor, colorFor, type TreeControls } from "./NodeRow";
 import { ContextMenu, type MenuItem } from "../ui";
-import { Settings, Folder, FolderPlus, FolderOpen, FileText, Bot, Trash2, Pencil, Plus, X, Copy, PanelRight, Terminal, GitBranch } from "lucide-react";
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  TouchSensor,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
-  useDroppable,
-  type DragStartEvent,
-  type DragOverEvent,
-  type DragEndEvent,
-} from "@dnd-kit/core";
+import { Settings, Folder, FolderPlus, FileText, Bot, Trash2, Pencil, Plus, X, Copy, PanelRight, Terminal, GitBranch } from "lucide-react";
+import { DndContext, DragOverlay, useDroppable } from "@dnd-kit/core";
+import { useTreeDnd, ROOT_ID } from "./useTreeDnd";
+import { AddWorkspaceDialog } from "./AddWorkspaceDialog";
 
-const ROOT_ID = "__root__";
-
-export function SpaceTree({
+export function NodeTree({
   selectedId,
   onSelect,
   onOpenSide,
@@ -36,9 +24,9 @@ export function SpaceTree({
   onChanged,
 }: {
   selectedId: string;
-  onSelect: (n: Space | null) => void;
-  onOpenSide?: (n: Space) => void;
-  onOpenTerminal?: (n: Space, opts?: { command?: string; titlePrefix?: string }) => void;
+  onSelect: (n: Node | null) => void;
+  onOpenSide?: (n: Node) => void;
+  onOpenTerminal?: (n: Node, opts?: { command?: string; titlePrefix?: string }) => void;
   onOpenGit?: (repo: GitRepositoryStatus) => void;
   createParentId?: string | null;
   refreshKey: number;
@@ -49,7 +37,7 @@ export function SpaceTree({
   onCloseMobile?: () => void;
   onChanged?: () => void;
 }) {
-  const [roots, setRoots] = useState<Space[]>([]);
+  const [roots, setRoots] = useState<Node[]>([]);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = Number(localStorage.getItem("arbor.sidebarWidth") || "");
     return Number.isFinite(saved) && saved >= 220 && saved <= 420 ? saved : 260;
@@ -70,7 +58,7 @@ export function SpaceTree({
 
   // 创建
   const [creatingUnder, setCreatingUnder] = useState<string | null>(null);
-  const [creatingKind, setCreatingKind] = useState<Space["kind"]>("space");
+  const [creatingKind, setCreatingKind] = useState<Node["kind"]>("space");
   const [draftTitle, setDraftTitle] = useState("");
 
   // 重命名
@@ -80,35 +68,16 @@ export function SpaceTree({
   // 菜单
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
 
-  // dnd-kit 状态
-  const [activeNode, setActiveNode] = useState<Space | null>(null);
-  const activeId = activeNode?.id || null;
-  const [overInfo, setOverInfo] = useState<{ spaceId: string; pos: DropPosition; space: Space } | null>(null);
-  const [overRoot, setOverRoot] = useState(false);
-
-  // 全局跟踪指针位置(算 drop position 用)
-  const pointerRef = useRef({ x: 0, y: 0 });
-  useEffect(() => {
-    const onMove = (e: PointerEvent) => { pointerRef.current = { x: e.clientX, y: e.clientY }; };
-    const onTouchMove = (e: TouchEvent) => {
-      const t = e.touches[0];
-      if (t) pointerRef.current = { x: t.clientX, y: t.clientY };
-    };
-    document.addEventListener("pointermove", onMove);
-    document.addEventListener("touchmove", onTouchMove, { passive: true });
-    return () => {
-      document.removeEventListener("pointermove", onMove);
-      document.removeEventListener("touchmove", onTouchMove);
-    };
-  }, []);
-
   const load = useCallback(async () => {
     const result = await api.listRoots();
-    setRoots(result.spaces || []);
+    setRoots(result.nodes || []);
   }, []);
 
   // 变更后:既刷新根,又冒泡到 App 让 refreshKey 自增 → 所有展开的子节点立即重载
   const refresh = useCallback(() => { load(); onChanged?.(); }, [load, onChanged]);
+
+  // 拖拽:状态 + 落库都在 hook 里
+  const { sensors, activeNode, overInfo, overRoot, dndHandlers } = useTreeDnd({ refresh, setExpanded });
 
   useEffect(() => { load(); }, [load, refreshKey]);
   useEffect(() => {
@@ -148,15 +117,8 @@ export function SpaceTree({
     window.addEventListener("pointerup", onUp);
   };
 
-  // ── sensors:鼠标 + 触摸 + 键盘 ──
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
-    useSensor(KeyboardSensor),
-  );
-
   // ── 创建 ──
-  const startCreate = (parentId: string | null, kind: Space["kind"]) => {
+  const startCreate = (parentId: string | null, kind: Node["kind"]) => {
     setCreatingUnder(parentId === null ? "" : parentId);
     setCreatingKind(kind);
     setDraftTitle("");
@@ -168,10 +130,10 @@ export function SpaceTree({
     if (creatingUnder === null) return;
     if (!title) { setCreatingUnder(null); setDraftTitle(""); return; }
     const parentId = creatingUnder === "" ? undefined : creatingUnder;
-    const result = await api.createSpace({ kind: creatingKind, title, parentId });
+    const result = await api.createNode({ kind: creatingKind, title, parentId });
     setCreatingUnder(null);
     setDraftTitle("");
-    handleSelect(result.space);
+    handleSelect(result.node);
     refresh();
   };
   const cancelCreate = () => { setCreatingUnder(null); setDraftTitle(""); };
@@ -194,8 +156,8 @@ export function SpaceTree({
     setWorkspaceError(null);
     try {
       const result = await api.addWorkspace({ path: workspacePath });
-      setExpanded(result.space.id, true);
-      handleSelect(result.space);
+      setExpanded(result.node.id, true);
+      handleSelect(result.node);
       setAddWorkspaceOpen(false);
       setWorkspacePathDraft("");
       refresh();
@@ -220,7 +182,7 @@ export function SpaceTree({
   };
 
   // ── 重命名 ──
-  const startRename = (n: Space) => { setRenamingId(n.id); setRenameDraft(n.title); };
+  const startRename = (n: Node) => { setRenamingId(n.id); setRenameDraft(n.title); };
   const commitRename = async () => {
     const id = renamingId;
     const title = renameDraft.trim();
@@ -231,146 +193,42 @@ export function SpaceTree({
   };
   const cancelRename = () => { setRenamingId(null); setRenameDraft(""); };
 
-  // ── 拖拽算法 ──
-  const nextPosUnder = async (parentId: string | null) => {
-    const siblings = parentId ? (await api.listChildren(parentId)).spaces : (await api.listRoots()).spaces;
-    const max = siblings.reduce((m: number, n: any) => Math.max(m, Number(n.position) || 0), 0);
-    return max + 1;
-  };
-
-  const applyDrop = async (sourceId: string, target: Space, position: DropPosition) => {
-    if (sourceId === target.id) return;
-    if (target.workspace && position !== "into") return;
-    try {
-      if (position === "into") {
-        if (target.kind !== "space") return;
-        const pos = await nextPosUnder(target.id);
-        await api.moveSpace(sourceId, target.id, pos);
-      } else {
-        const parentId = target.parent_id;
-        const siblingsList = parentId
-          ? (await api.listChildren(parentId)).spaces
-          : (await api.listRoots()).spaces;
-        const siblings = siblingsList.filter((n: any) => n.id !== sourceId);
-        const idx = siblings.findIndex((n: any) => n.id === target.id);
-        const targetPos = Number(target.position) || (idx + 1);
-        let newPos: number;
-        if (position === "before") {
-          const prev = idx > 0 ? siblings[idx - 1] : null;
-          const prevPos = prev ? Number(prev.position) || 0 : targetPos - 1;
-          newPos = (prevPos + targetPos) / 2;
-        } else {
-          const next = idx < siblings.length - 1 ? siblings[idx + 1] : null;
-          const nextPos = next ? Number(next.position) || (targetPos + 1) : targetPos + 1;
-          newPos = (targetPos + nextPos) / 2;
-        }
-        await api.moveSpace(sourceId, parentId, newPos);
-      }
-      refresh();
-    } catch (e: any) {
-      alert(e.message || "move failed");
-    }
-  };
-
-  const applyDropToRoot = async (sourceId: string) => {
-    if (sourceId) setOverRoot(false);
-  };
-
-  // ── dnd-kit 事件 ──
-  const handleDragStart = (e: DragStartEvent) => {
-    const space = (e.active.data.current as any)?.space as Space | undefined;
-    if (space) setActiveNode(space);
-  };
-
-  const handleDragOver = (e: DragOverEvent) => {
-    const over = e.over;
-    if (!over) { setOverInfo(null); setOverRoot(false); return; }
-    if (String(over.id) === ROOT_ID) {
-      setOverInfo(null);
-      setOverRoot(true);
-      return;
-    }
-    setOverRoot(false);
-    const space = (over.data.current as any)?.space as Space | undefined;
-    if (!space) { setOverInfo(null); return; }
-    if (space.id === activeId) { setOverInfo(null); return; }
-    // 自己不能拖进自己的子孙(基础防环,后端兜底)
-    const rect = over.rect;
-    if (!rect) { setOverInfo(null); return; }
-    const py = pointerRef.current.y;
-    const rel = Math.max(0, Math.min(1, (py - rect.top) / rect.height));
-
-    let pos: DropPosition;
-    if (space.kind === "space") {
-      if (rel < 0.25) pos = "before";
-      else if (rel > 0.75) pos = "after";
-      else pos = "into";
-    } else {
-      pos = rel < 0.5 ? "before" : "after";
-    }
-    setOverInfo({ spaceId: space.id, pos, space });
-  };
-
-  const handleDragEnd = async (_e: DragEndEvent) => {
-    const src = activeId;
-    const info = overInfo;
-    const root = overRoot;
-    setActiveNode(null);
-    setOverInfo(null);
-    setOverRoot(false);
-    if (!src) return;
-    if (root) {
-      await applyDropToRoot(src);
-      return;
-    }
-    if (info) {
-      if (info.pos === "into") setExpanded(info.space.id, true);
-      await applyDrop(src, info.space, info.pos);
-    }
-  };
-
-  const handleDragCancel = () => {
-    setActiveNode(null);
-    setOverInfo(null);
-    setOverRoot(false);
-  };
-
   // ── 右键 ──
-  const onNodeContext = async (e: React.MouseEvent, space: Space) => {
+  const onNodeContext = async (e: React.MouseEvent, node: Node) => {
     e.preventDefault();
     e.stopPropagation();
     const items: MenuItem[] = [];
     let gitRepo: GitRepositoryStatus | null = null;
-    if (space.kind === "space" && onOpenGit) {
+    if (node.kind === "space" && onOpenGit) {
       try {
-        gitRepo = (await api.gitRepository(space.id)).repository;
+        gitRepo = (await api.gitRepository(node.id)).repository;
       } catch {
         gitRepo = null;
       }
     }
-    if (space.kind === "space") {
+    if (node.kind === "space") {
       items.push(
         { label: "新建智能体", icon: <Bot size={13} className="text-warning" />,
-          onClick: () => startCreate(space.id, "agent") },
+          onClick: () => startCreate(node.id, "agent") },
         "divider",
         { label: "新建文件夹", icon: <Folder size={13} className="text-accent" />,
-          onClick: () => startCreate(space.id, "space") },
+          onClick: () => startCreate(node.id, "space") },
         { label: "新建文件", icon: <FileText size={13} className="text-text-faint" />,
-          onClick: () => startCreate(space.id, "file") },
+          onClick: () => startCreate(node.id, "file") },
         "divider",
       );
     }
     // 智能体:复制稳定 uuid(给 call_agent 用);空间/文件:复制相对 workspaces 的干净路径
-    const isConv = space.kind === "agent";
-    const copyText = isConv ? space.id : space.id.replace(/^.*\/workspaces\//, "");
-    if (space.kind !== "space" && onOpenSide) {
+    const isConv = node.kind === "agent";
+    const copyText = isConv ? node.id : node.id.replace(/^.*\/workspaces\//, "");
+    if (node.kind !== "space" && onOpenSide) {
       items.push(
-        { label: "打开到侧边", icon: <PanelRight size={13} />, onClick: () => onOpenSide(space) },
+        { label: "打开到侧边", icon: <PanelRight size={13} />, onClick: () => onOpenSide(node) },
         "divider",
       );
     }
     items.push(
-      { label: "重命名", icon: <Pencil size={13} />, onClick: () => startRename(space) },
+      { label: "重命名", icon: <Pencil size={13} />, onClick: () => startRename(node) },
       { label: isConv ? "复制 ID" : "复制路径", icon: <Copy size={13} />,
         onClick: async () => {
           try { await navigator.clipboard.writeText(copyText); }
@@ -383,11 +241,11 @@ export function SpaceTree({
       },
       "divider",
       { label: "打开终端", icon: <Terminal size={13} className="text-success" />,
-        onClick: () => onOpenTerminal?.(space), disabled: !onOpenTerminal },
+        onClick: () => onOpenTerminal?.(node), disabled: !onOpenTerminal },
       { label: "启动 Codex", icon: <Terminal size={13} className="text-success" />,
-        onClick: () => onOpenTerminal?.(space, { command: "codex", titlePrefix: "Codex" }), disabled: !onOpenTerminal },
+        onClick: () => onOpenTerminal?.(node, { command: "codex", titlePrefix: "Codex" }), disabled: !onOpenTerminal },
       { label: "启动 Claude Code", icon: <Terminal size={13} className="text-success" />,
-        onClick: () => onOpenTerminal?.(space, { command: "claude", titlePrefix: "Claude Code" }), disabled: !onOpenTerminal },
+        onClick: () => onOpenTerminal?.(node, { command: "claude", titlePrefix: "Claude Code" }), disabled: !onOpenTerminal },
       "divider",
     );
     if (gitRepo?.root) {
@@ -401,16 +259,16 @@ export function SpaceTree({
       );
     }
     items.push(
-      { label: space.workspace ? "移除工作区" : "删除", icon: <Trash2 size={13} />, danger: true,
+      { label: node.workspace ? "移除工作区" : "删除", icon: <Trash2 size={13} />, danger: true,
         onClick: async () => {
-          if (space.workspace) {
-            if (!confirm(`从 Arbor 移除工作区「${space.title}」?\n不会删除磁盘文件。`)) return;
-            await api.removeWorkspace(space.id);
+          if (node.workspace) {
+            if (!confirm(`从 Arbor 移除工作区「${node.title}」?\n不会删除磁盘文件。`)) return;
+            await api.removeWorkspace(node.id);
           } else {
-            if (!confirm(`删除「${space.title}」?${space.kind === "space" ? "\n里面所有内容也会一起删除。" : ""}`)) return;
-            await api.deleteSpace(space.id);
+            if (!confirm(`删除「${node.title}」?${node.kind === "space" ? "\n里面所有内容也会一起删除。" : ""}`)) return;
+            await api.deleteNode(node.id);
           }
-          if (selectedId === space.id) onSelect(null);
+          if (selectedId === node.id) onSelect(null);
           refresh();
         },
       },
@@ -428,7 +286,7 @@ export function SpaceTree({
     });
   };
 
-  const handleSelect = (n: Space | null) => {
+  const handleSelect = (n: Node | null) => {
     onSelect(n);
     if (mobileOpen && n?.kind !== "space") onCloseMobile?.();
   };
@@ -457,16 +315,10 @@ export function SpaceTree({
     expandedIds, toggleExpand, setExpanded,
     creatingUnder, creatingKind, draftTitle, setDraftTitle, commitCreate, cancelCreate,
     renamingId, renameDraft, setRenameDraft, commitRename, cancelRename,
-    activeId, overNodeId: overInfo?.spaceId || null, dropPos: overInfo?.pos || null,
+    activeId: activeNode?.id || null, overNodeId: overInfo?.nodeId || null, dropPos: overInfo?.pos || null,
   };
   return (
-    <DndContext
-      sensors={sensors}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-      onDragCancel={handleDragCancel}
-    >
+    <DndContext sensors={sensors} {...dndHandlers}>
       <aside
         style={{ width: `min(${sidebarWidth}px, calc(100vw - 32px))` }}
         className={[
@@ -499,10 +351,10 @@ export function SpaceTree({
         <RootDroppable highlight={overRoot} onContextMenu={onBlankContext}>
           {creatingUnder === "" && <InlineCreateRow depth={0} controls={controls} />}
 
-          {roots.map((space) => (
-            <SpaceRow
-              key={space.id}
-              space={space}
+          {roots.map((node) => (
+            <NodeRow
+              key={node.id}
+              node={node}
               selectedId={selectedId}
               onSelect={handleSelect}
               onContextMenu={onNodeContext}
@@ -564,7 +416,7 @@ export function SpaceTree({
 
       {/* 拖动时跟手指/鼠标的预览 */}
       <DragOverlay dropAnimation={null}>
-        {activeNode ? <DragPreview space={activeNode} /> : null}
+        {activeNode ? <DragPreview node={activeNode} /> : null}
       </DragOverlay>
     </DndContext>
   );
@@ -591,100 +443,13 @@ function RootDroppable({
   );
 }
 
-function DragPreview({ space }: { space: Space }) {
-  const Icon = iconFor(space.kind);
-  const color = colorFor(space.kind);
+function DragPreview({ node }: { node: Node }) {
+  const Icon = iconFor(node.kind);
+  const color = colorFor(node.kind);
   return (
     <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-white border border-accent shadow-lg shadow-black/15 text-[14.5px] cursor-grabbing select-none">
       <Icon size={14} className={color} />
-      <span className="truncate max-w-48">{space.title}</span>
-    </div>
-  );
-}
-
-function AddWorkspaceDialog({
-  value,
-  error,
-  submitting,
-  picking,
-  onChange,
-  onPick,
-  onSubmit,
-  onClose,
-}: {
-  value: string;
-  error: string | null;
-  submitting: boolean;
-  picking: boolean;
-  onChange: (value: string) => void;
-  onPick: () => void;
-  onSubmit: () => void;
-  onClose: () => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => { inputRef.current?.focus(); }, []);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/20 px-4 pt-24" onClick={onClose}>
-      <form
-        className="w-full max-w-lg rounded-lg border border-border bg-bg shadow-2xl shadow-black/20"
-        onClick={(e) => e.stopPropagation()}
-        onSubmit={(e) => { e.preventDefault(); onSubmit(); }}
-      >
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <div className="flex items-center gap-2 text-[14px] font-medium text-text">
-            <FolderPlus size={15} className="text-accent" />
-            <span>添加工作区</span>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-6 w-6 items-center justify-center rounded text-text-faint hover:bg-bg-hover hover:text-text"
-            title="关闭"
-          >
-            <X size={14} />
-          </button>
-        </div>
-        <div className="space-y-3 px-4 py-4">
-          <label className="block text-[12px] font-medium text-text-dim">文件夹路径</label>
-          <div className="flex gap-2">
-            <input
-              ref={inputRef}
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              placeholder="/Users/me/projects/my-app"
-              className="min-w-0 flex-1 rounded-md border border-border bg-bg px-3 py-2 text-[13px] text-text outline-none focus:border-accent"
-            />
-            <button
-              type="button"
-              onClick={onPick}
-              disabled={submitting || picking}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-bg px-3 py-2 text-[13px] text-text-dim hover:bg-bg-hover hover:text-text disabled:opacity-50"
-            >
-              <FolderOpen size={14} />
-              {picking ? "选择中" : "选择目录"}
-            </button>
-          </div>
-          {error && <div className="text-[12px] text-danger">{error}</div>}
-        </div>
-        <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="rounded px-3 py-1.5 text-[13px] text-text-dim hover:bg-bg-hover disabled:opacity-50"
-          >
-            取消
-          </button>
-          <button
-            type="submit"
-            disabled={submitting || !value.trim()}
-            className="rounded bg-accent px-3 py-1.5 text-[13px] text-white hover:opacity-90 disabled:opacity-50"
-          >
-            添加
-          </button>
-        </div>
-      </form>
+      <span className="truncate max-w-48">{node.title}</span>
     </div>
   );
 }

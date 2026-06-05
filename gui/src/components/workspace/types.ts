@@ -1,4 +1,4 @@
-import type { Space } from "../../api";
+import type { Node } from "../../api";
 
 export const PROCESS_TAB_ID = "__process_preview__";
 export const TERMINAL_TAB_PREFIX = "__terminal__";
@@ -42,7 +42,7 @@ export type SettingsTab = {
   title: "设置";
 };
 
-export type WorkspaceTab = Space | ProcessTab | TerminalTab | GitTab | GitDiffTab | SettingsTab;
+export type WorkspaceTab = Node | ProcessTab | TerminalTab | GitTab | GitDiffTab | SettingsTab;
 export type WorkspaceGroupId = "main" | "side";
 
 export type WorkspaceGroupState = {
@@ -103,8 +103,8 @@ export const isGitDiffTab = (tab: WorkspaceTab | null | undefined): tab is GitDi
 export const isSettingsTab = (tab: WorkspaceTab | null | undefined): tab is SettingsTab =>
   tab?.kind === "settings";
 
-export const isSpaceTab = (tab: WorkspaceTab | null | undefined): tab is Space =>
+export const isNodeTab = (tab: WorkspaceTab | null | undefined): tab is Node =>
   !!tab && tab.kind !== "process" && tab.kind !== "terminal" && tab.kind !== "git" && tab.kind !== "git-diff" && tab.kind !== "settings";
 
-export const isOpenableSpace = (space: Space | null | undefined): space is Space =>
-  !!space && space.kind !== "space";
+export const isOpenableSpace = (node: Node | null | undefined): node is Node =>
+  !!node && node.kind !== "space";

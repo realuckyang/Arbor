@@ -93,7 +93,11 @@ server/
 ├── api/index.ts           ← 🌐 HTTP(薄,只解析请求/拼响应,业务委托 service)
 ├── realtime.ts            ← 📡 WebSocket(broadcast / stop / send)
 └── bus.ts / db.ts / http.ts / static.ts
-gui/src/                   ← React 19 前端(SpaceTree 树 / ChatPanel / FilePanel / TabBar / 快开/搜索/命令面板)
+gui/src/components/        ← React 19 前端,按 UI 区域分模块
+├── explorer/              ← 左侧树:NodeTree / NodeRow(dnd 抽成 useTreeDnd hook)
+├── workspace/             ← 编辑器外壳:TabBar / TabContent / useTabGroups + panels/(Process·Terminal·Git·GitDiff·Empty 等 tab 内容)
+├── command/              ← ⌘P 快开 / ⌘⇧P 命令面板 / ⌘⇧F 搜索
+└── chat · files · settings · ui ← 智能体对话 / 文件编辑 / 设置 / 共享原语(TabContent 按 tab.kind 装配)
 ```
 
 **关键边界**:`agent/` 不知道树是什么 —— 只接收已组装好的消息和 `ctx`(含工作目录 cwd)跑 LLM 循环;`service/` 承载业务(事件、状态、编排);`repo/` 只做纯数据访问;`api/` 只管 HTTP。

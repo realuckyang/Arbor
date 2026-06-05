@@ -1,13 +1,9 @@
-import type { Settings, Space } from "../../api";
+import type { Settings, Node } from "../../api";
 import { ChatPanel } from "../chat";
 import { FilePanel } from "../files";
-import { EmptyPanel } from "./EmptyPanel";
-import { GitDiffPanel } from "./GitDiffPanel";
-import { ProcessPanel } from "./ProcessPanel";
-import { TerminalPanel } from "./TerminalPanel";
 import { SettingsPanel } from "../settings";
-import { GitView } from "../sidebar";
-import { isGitDiffTab, isGitTab, isProcessTab, isSettingsTab, isSpaceTab, isTerminalTab, type WorkspaceTab } from "./types";
+import { EmptyPanel, GitDiffPanel, GitView, ProcessPanel, TerminalPanel } from "./panels";
+import { isGitDiffTab, isGitTab, isProcessTab, isSettingsTab, isNodeTab, isTerminalTab, type WorkspaceTab } from "./types";
 
 type Socket = {
   send: (m: any) => void;
@@ -40,7 +36,7 @@ export function TabContent({
   gitRefreshKey: number;
   onFileChange: (id: string, value: string) => void;
   onFileSaved: (id: string) => void;
-  onSelect: (n: Space) => void;
+  onSelect: (n: Node) => void;
   onOpenNav?: () => void;
   onOpenSettings: () => void;
   onSettingsSaved?: (settings: Settings) => void;
@@ -79,11 +75,11 @@ export function TabContent({
     return <SettingsPanel onSaved={onSettingsSaved} />;
   }
 
-  if (isSpaceTab(tab) && tab.kind === "agent") {
+  if (isNodeTab(tab) && tab.kind === "agent") {
     return (
       <ChatPanel
         key={tab.id}
-        space={tab}
+        node={tab}
         onSelect={onSelect}
         socket={socket}
         onOpenNav={onOpenNav}
@@ -92,11 +88,11 @@ export function TabContent({
     );
   }
 
-  if (isSpaceTab(tab) && tab.kind === "file") {
+  if (isNodeTab(tab) && tab.kind === "file") {
     return (
       <FilePanel
         key={tab.id}
-        space={tab}
+        node={tab}
         draft={drafts[tab.id]}
         refreshKey={fileRefreshKeys[tab.id] || 0}
         gotoLine={pendingGoto?.id === tab.id ? pendingGoto.line : undefined}

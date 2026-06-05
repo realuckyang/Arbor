@@ -1,6 +1,6 @@
 // 统一树的一个 item:kind 区分它是空间 / 智能体 / 文件。
-// 存储在后端拆成 spaces / agents / files 三类,这里合成一棵树。
-export type Space = {
+// 存储在后端拆成 nodes / agents / files 三类,这里合成一棵树。
+export type Node = {
   id: string;
   parent_id: string | null;                                      // 所在空间(根 = null)
   kind: "space" | "agent" | "file";
@@ -15,7 +15,7 @@ export type Space = {
   size?: number;                                                 // 仅 file:字节数
   binary?: boolean;                                              // 仅 file:二进制,无法当文本预览
   tooLarge?: boolean;                                            // 仅 file:超过文本预览上限
-  workspace?: boolean;                                           // space 且 parent_id=null 时表示工作区 root
+  workspace?: boolean;                                           // node 且 parent_id=null 时表示工作区 root
 };
 
 export type SearchMatch = { line: number; text: string };
@@ -117,38 +117,38 @@ const jsonBody = (body: any): RequestInit => ({
   body: JSON.stringify(body),
 });
 
-// 后端返回 { item } / { items },这里统一映射成 { space } / { spaces } 供组件沿用
-const one = (d: any) => ({ space: d.item as Space });
-const many = (d: any) => ({ spaces: (d.items || []) as Space[] });
+// 后端返回 { item } / { items },这里统一映射成 { node } / { nodes } 供组件沿用
+const one = (d: any) => ({ node: d.item as Node });
+const many = (d: any) => ({ nodes: (d.items || []) as Node[] });
 
 export const api = {
   health: () => request<{ ok: boolean }>("/health"),
 
-  listRoots: () => request<{ items: Space[] }>("/api/tree?parentId=").then(many),
+  listRoots: () => request<{ items: Node[] }>("/api/tree?parentId=").then(many),
   listChildren: (parentId: string) =>
-    request<{ items: Space[] }>(`/api/tree?parentId=${encodeURIComponent(parentId)}`).then(many),
-  listAllNodes: () => request<{ items: Space[] }>("/api/tree/all").then(many),
+    request<{ items: Node[] }>(`/api/tree?parentId=${encodeURIComponent(parentId)}`).then(many),
+  listAllNodes: () => request<{ items: Node[] }>("/api/tree/all").then(many),
   searchContent: (q: string) =>
     request<{ results: SearchResult[] }>(`/api/search?q=${encodeURIComponent(q)}`),
-  getSpace: (id: string) =>
-    request<{ item: Space }>(`/api/tree/get?id=${encodeURIComponent(id)}`).then(one),
-  createSpace: (opts: { kind: Space["kind"]; title: string; parentId?: string; system?: string; content?: string }) =>
-    request<{ item: Space }>("/api/tree", { method: "POST", ...jsonBody(opts) }).then(one),
+  getNode: (id: string) =>
+    request<{ item: Node }>(`/api/tree/get?id=${encodeURIComponent(id)}`).then(one),
+  createNode: (opts: { kind: Node["kind"]; title: string; parentId?: string; system?: string; content?: string }) =>
+    request<{ item: Node }>("/api/tree", { method: "POST", ...jsonBody(opts) }).then(one),
   updateNode: (id: string, patch: { title?: string; content?: string; system?: string; parentId?: string | null }) =>
-    request<{ item: Space }>(`/api/tree?id=${encodeURIComponent(id)}`, { method: "PATCH", ...jsonBody(patch) }).then(one),
-  moveSpace: (id: string, newParentId: string | null, position?: number) =>
-    request<{ item: Space }>(`/api/tree?id=${encodeURIComponent(id)}`, { method: "PATCH", ...jsonBody({ parentId: newParentId, position }) }).then(one),
-  markSpaceRead: (id: string) =>
-    request<{ item: Space }>(`/api/tree/read?id=${encodeURIComponent(id)}`, { method: "POST" }).then(one),
-  deleteSpace: (id: string) =>
+    request<{ item: Node }>(`/api/tree?id=${encodeURIComponent(id)}`, { method: "PATCH", ...jsonBody(patch) }).then(one),
+  moveNode: (id: string, newParentId: string | null, position?: number) =>
+    request<{ item: Node }>(`/api/tree?id=${encodeURIComponent(id)}`, { method: "PATCH", ...jsonBody({ parentId: newParentId, position }) }).then(one),
+  markNodeRead: (id: string) =>
+    request<{ item: Node }>(`/api/tree/read?id=${encodeURIComponent(id)}`, { method: "POST" }).then(one),
+  deleteNode: (id: string) =>
     request<{ ok: boolean }>(`/api/tree?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
   ancestry: (id: string) =>
-    request<{ ancestry: Space[] }>(`/api/ancestry?id=${encodeURIComponent(id)}`),
+    request<{ ancestry: Node[] }>(`/api/ancestry?id=${encodeURIComponent(id)}`),
 
   listWorkspaces: () => request<{ workspaces: WorkspaceRoot[] }>("/api/workspaces"),
   pickWorkspaceDirectory: () => request<{ path: string | null }>("/api/workspaces/pick", { method: "POST" }),
   addWorkspace: (opts: { path: string; title?: string }) =>
-    request<{ item: Space }>("/api/workspaces", { method: "POST", ...jsonBody(opts) }).then(one),
+    request<{ item: Node }>("/api/workspaces", { method: "POST", ...jsonBody(opts) }).then(one),
   removeWorkspace: (id: string) =>
     request<{ ok: boolean; workspace: WorkspaceRoot | null }>(`/api/workspaces?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
 

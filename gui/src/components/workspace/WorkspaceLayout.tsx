@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import type { Settings, Space } from "../../api";
+import type { Settings, Node } from "../../api";
 import { WorkspaceGroup } from "./WorkspaceGroup";
 import type { WorkspaceGroupId, WorkspaceGroupState, WorkspaceTab } from "./types";
 
@@ -82,7 +82,7 @@ export function WorkspaceLayout({
   onCloseGroup: (groupId: WorkspaceGroupId) => void;
   onFileChange: (id: string, value: string) => void;
   onFileSaved: (id: string) => void;
-  onSelect: (n: Space) => void;
+  onSelect: (n: Node) => void;
   onOpenNav?: () => void;
   onOpenSettings: () => void;
   onSettingsSaved?: (settings: Settings) => void;
