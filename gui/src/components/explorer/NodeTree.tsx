@@ -343,7 +343,7 @@ export function NodeTree({
         ].join(" ")}
       >
         {/* brand */}
-        <div className="flex items-center gap-2.5 px-3.5 py-3 border-b border-border">
+        <div className="flex items-center gap-2.5 px-3.5 h-11 border-b border-border">
           <span className="text-[20px] leading-none select-none">🌳</span>
           <span className="text-[17px] font-semibold text-text flex-1 tracking-tight">Arbor</span>
           <button onClick={openNewMenu} title="新建"

@@ -213,7 +213,7 @@ export function TabBar({
       data-tab-drop-group={groupId}
       data-tab-bar-group={groupId}
       data-tab-count={tabs.length}
-      className="flex items-stretch h-9 bg-bg-raised border-b border-border overflow-x-auto no-scrollbar shrink-0"
+      className="flex items-stretch h-11 bg-bg-raised border-b border-border overflow-x-auto no-scrollbar shrink-0"
     >
       {/* 侧边栏开关 */}
       {onOpenNav && (
