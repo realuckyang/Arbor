@@ -74,6 +74,7 @@ const markRead = (id) => {
 const ancestry = (id) => repo.ancestry(id);
 const search = (q) => (q ? searchContent(q) : []);
 const fileRawAbs = (id) => repo.resolveFileAbs(id);
+const pathForId = (id) => repo.pathForId(id);
 const terminalCwd = (id) => repo.terminalCwd(id);
 
-export { enrich, listChildren, listAll, getItem, create, update, remove, markRead, ancestry, search, fileRawAbs, listWorkspaces, addWorkspace, removeWorkspace, terminalCwd };
+export { enrich, listChildren, listAll, getItem, create, update, remove, markRead, ancestry, search, fileRawAbs, pathForId, listWorkspaces, addWorkspace, removeWorkspace, terminalCwd };

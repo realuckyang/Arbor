@@ -3,8 +3,8 @@ import { useSocket } from "./ws";
 import { api, type GitRepositoryStatus, type Node } from "./api";
 import { QuickOpen, CommandPalette, type Command } from "./components/command";
 import { NodeTree } from "./components/explorer";
-import { WorkspaceLayout, isSettingsTab, isNodeTab, useTabGroups } from "./components/workspace";
-import { FileText, Folder, FolderPlus, Bot, Search, Settings as SettingsIcon, X, MonitorPlay, PanelRight } from "lucide-react";
+import { WorkspaceLayout, isSettingsTab, isActivityTab, isNodeTab, useTabGroups } from "./components/workspace";
+import { FileText, Folder, FolderPlus, Bot, Search, Settings as SettingsIcon, X, MonitorPlay, PanelRight, Radio } from "lucide-react";
 import type { ManagedProcess } from "./api";
 
 export function App() {
@@ -61,6 +61,8 @@ export function App() {
     tabGroups.openTerminal(cwdHint, title, { command: opts.command });
   };
   const openSettings = () => tabGroups.openSettings();
+  const openActivity = () => tabGroups.openActivity();
+  const openAgentById = (id: string) => api.getNode(id).then((r) => r.node && openNode(r.node)).catch(() => {});
 
   const refreshGit = useCallback(() => setGitRefreshKey((n) => n + 1), []);
   const openGit = (repo: GitRepositoryStatus) => {
@@ -192,6 +194,7 @@ export function App() {
         if (id) tabGroups.moveTab(tabGroups.activeGroupId, id);
       },
     },
+    { id: "activity", label: "打开活动(智能体调用)", icon: <Radio size={14} />, run: openActivity },
     { id: "settings", label: "打开设置", icon: <SettingsIcon size={14} />, run: openSettings },
     {
       id: "close-tab",
@@ -226,6 +229,8 @@ export function App() {
         refreshKey={treeRefresh}
         settingsActive={isSettingsTab(tabGroups.activeTab)}
         onOpenSettings={openSettings}
+        activityActive={isActivityTab(tabGroups.activeTab)}
+        onOpenActivity={openActivity}
         mobileOpen={mobileNavOpen}
         desktopOpen={desktopNavOpen}
         onCloseMobile={closeNav}
@@ -267,6 +272,7 @@ export function App() {
           onFileChange={onFileChange}
           onFileSaved={onFileSaved}
           onSelect={openNode}
+          onOpenAgent={openAgentById}
           onOpenNav={toggleNav}
           onOpenSettings={openSettings}
           onGitChanged={refreshGit}

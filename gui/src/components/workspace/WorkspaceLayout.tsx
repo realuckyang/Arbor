@@ -55,6 +55,7 @@ export function WorkspaceLayout({
   onFileChange,
   onFileSaved,
   onSelect,
+  onOpenAgent,
   onOpenNav,
   onOpenSettings,
   onSettingsSaved,
@@ -83,6 +84,7 @@ export function WorkspaceLayout({
   onFileChange: (id: string, value: string) => void;
   onFileSaved: (id: string) => void;
   onSelect: (n: Node) => void;
+  onOpenAgent?: (id: string) => void;
   onOpenNav?: () => void;
   onOpenSettings: () => void;
   onSettingsSaved?: (settings: Settings) => void;
@@ -248,6 +250,7 @@ export function WorkspaceLayout({
               onFileChange={onFileChange}
               onFileSaved={onFileSaved}
               onSelect={onSelect}
+              onOpenAgent={onOpenAgent}
               onOpenNav={onOpenNav}
               onOpenSettings={onOpenSettings}
               onSettingsSaved={onSettingsSaved}

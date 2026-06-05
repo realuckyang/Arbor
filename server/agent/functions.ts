@@ -2,7 +2,7 @@
 // agent 工具实现:
 //   shell                               — 跑任意命令(无限制,在智能体的工作目录里)
 //   read_file / edit_file / write_file  — 有界读 / 精确替换 / 带护栏写(比纯 shell 对 LLM 更友好)
-//   web_search / web_fetch              — 联网:搜索 + 抓正文
+//   web_fetch                           — 联网:抓取一个已知 URL 的正文
 //   create_agent / call_agent           — 派生子智能体 / 给已存在智能体发消息
 // 文件类工具的相对路径都相对智能体的工作目录(ctx.cwd = 它所在空间目录)解析,跟 shell 一致。
 
@@ -180,36 +180,6 @@ const fetchWithTimeout = async (url, ms = 15000) => {
   } finally { clearTimeout(t); }
 };
 
-// ─── web_search:DuckDuckGo(无需 key)───
-const web_search = async ({ query }) => {
-  const q = String(query || "").trim();
-  if (!q) return "error: query 不能为空";
-  try {
-    const res = await fetchWithTimeout("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(q));
-    const html = await res.text();
-    const results = [];
-    const re = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
-    let m;
-    while ((m = re.exec(html)) && results.length < 8) {
-      let link = m[1];
-      const uddg = link.match(/uddg=([^&]+)/);
-      if (uddg) { try { link = decodeURIComponent(uddg[1]); } catch {} }
-      if (link.startsWith("//")) link = "https:" + link;
-      results.push({ title: stripHtml(m[2]), link });
-    }
-    const snippets = [];
-    const sre = /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
-    let s;
-    while ((s = sre.exec(html)) && snippets.length < 8) snippets.push(stripHtml(s[1]));
-    if (!results.length) return "(无结果,或搜索源暂不可用)";
-    return results
-      .map((r, i) => `${i + 1}. ${r.title}\n   ${r.link}${snippets[i] ? `\n   ${snippets[i]}` : ""}`)
-      .join("\n\n");
-  } catch (e) {
-    return `error: 搜索失败 ${e?.name === "AbortError" ? "超时" : e?.message}`;
-  }
-};
-
 // ─── web_fetch:抓网页并提取正文 ───
 const web_fetch = async ({ url }) => {
   const u = String(url || "").trim();
@@ -276,7 +246,6 @@ export {
   read_file,
   edit_file,
   write_file,
-  web_search,
   web_fetch,
   create_agent,
   call_agent,

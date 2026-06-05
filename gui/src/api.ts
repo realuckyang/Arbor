@@ -41,6 +41,8 @@ export type Call = {
   error: string | null;
   created_at: string;
   completed_at: string | null;
+  callerTitle?: string | null;
+  calleeTitle?: string | null;
 };
 
 export type Settings = {
@@ -195,4 +197,8 @@ export const api = {
     request<{ process: ManagedProcess }>(`/api/processes/get?id=${encodeURIComponent(id)}`),
   stopProcess: (id: string) =>
     request<{ process: ManagedProcess }>(`/api/processes/stop?id=${encodeURIComponent(id)}`, { method: "POST" }),
+
+  // 在系统文件管理器(Finder / 资源管理器)里显示该节点
+  revealNode: (id: string) =>
+    request<{ ok: boolean; path: string }>(`/api/reveal?id=${encodeURIComponent(id)}`, { method: "POST" }),
 };

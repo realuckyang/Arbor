@@ -8,6 +8,7 @@ import {
   processTab,
   PROCESS_TAB_ID,
   settingsTab,
+  activityTab,
   terminalTab,
   type WorkspaceGroupId,
   type WorkspaceGroupState,
@@ -123,6 +124,10 @@ export function useTabGroups({ canCloseTab = () => true, onTabClosed = () => {} 
 
   const openSettings = useCallback((opts: { groupId?: WorkspaceGroupId; side?: boolean } = {}) => {
     openTab(settingsTab(), opts);
+  }, [openTab]);
+
+  const openActivity = useCallback((opts: { groupId?: WorkspaceGroupId; side?: boolean } = {}) => {
+    openTab(activityTab(), opts);
   }, [openTab]);
 
   const activateTab = useCallback((groupId: WorkspaceGroupId, id: string) => {
@@ -272,6 +277,7 @@ export function useTabGroups({ canCloseTab = () => true, onTabClosed = () => {} 
     openGit,
     openGitDiff,
     openSettings,
+    openActivity,
     activateTab,
     reorderTabs,
     closeTabs,

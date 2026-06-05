@@ -62,7 +62,7 @@ SQLite 只存**运行时状态**(不存结构):
 |---|---|
 | `shell(command, reason)` | 在你的工作目录里执行**任意**命令 —— 全功能、无超时;建目录=新文件夹、跑构建/服务都在这 |
 | `read_file / edit_file / write_file` | 带行号读 / 精确替换 / 带护栏写(改文件首选,比 shell sed 可靠省 token) |
-| `web_search / web_fetch` | 联网搜索(DuckDuckGo,无需 key)+ 抓网页正文 |
+| `web_fetch` | 抓取一个已知网页链接的正文(去标签返回可读文本) |
 | `create_agent(title, message?, system?, reason)` | 在你所在文件夹下派生一个兄弟智能体;可附初始消息(异步) |
 | `call_agent(agent_id, message, reason)` | 给已存在的智能体发消息(异步,结果回到自己邮箱) |
 

@@ -36,6 +36,7 @@ export function WorkspaceGroup({
   onFileChange,
   onFileSaved,
   onSelect,
+  onOpenAgent,
   onOpenNav,
   onOpenSettings,
   onSettingsSaved,
@@ -66,6 +67,7 @@ export function WorkspaceGroup({
   onFileChange: (id: string, value: string) => void;
   onFileSaved: (id: string) => void;
   onSelect: (n: Node) => void;
+  onOpenAgent?: (id: string) => void;
   onOpenNav?: () => void;
   onOpenSettings: () => void;
   onSettingsSaved?: (settings: Settings) => void;
@@ -114,6 +116,7 @@ export function WorkspaceGroup({
           onFileChange={onFileChange}
           onFileSaved={onFileSaved}
           onSelect={onSelect}
+          onOpenAgent={onOpenAgent}
           onOpenNav={showNavButton ? onOpenNav : undefined}
           onOpenSettings={onOpenSettings}
           onSettingsSaved={onSettingsSaved}

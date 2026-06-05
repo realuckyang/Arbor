@@ -184,6 +184,54 @@ const resolveFileAbs = (id) => {
   return hit && hit.kind === "file" ? hit.abs : null;
 };
 
+// 任意节点 → 磁盘绝对路径(文件夹=目录,文件=文件,智能体=.agent.json)。仅工作区内有效。
+const pathForId = (id) => { const hit = locate(id); return hit ? hit.abs : null; };
+
+// SKILL.md → { name, description }:优先 frontmatter,回退到首个标题 / 首行
+const parseSkill = (content, fallbackName) => {
+  let name = fallbackName, description = "";
+  const fm = content.match(/^---\n([\s\S]*?)\n---/);
+  if (fm) {
+    const n = fm[1].match(/^name:\s*(.+)$/m); if (n) name = n[1].trim().replace(/^["']|["']$/g, "");
+    const d = fm[1].match(/^description:\s*(.+)$/m); if (d) description = d[1].trim().replace(/^["']|["']$/g, "");
+  }
+  if (!description) {
+    const body = content.replace(/^---\n[\s\S]*?\n---\n?/, "");
+    const h = body.match(/^#\s+(.+)$/m); if (h && !name) name = h[1].trim();
+    const firstPara = body.split(/\n\s*\n/).map((s) => s.replace(/^#+\s*/, "").trim()).find((s) => s.length > 0);
+    description = (firstPara || "").slice(0, 200);
+  }
+  return { name, description };
+};
+
+// 智能体上下文:只看智能体「自己所在的那个文件夹」—— 同级的 AGENTS.md / CLAUDE.md(指令)
+// 和 skills/<名>/SKILL.md(可用技能)。不向上继承、不向下穿透:作用范围仅同级。
+// 这些都只是树里的文件,放哪个文件夹就只对那个文件夹里的智能体生效。
+const CONTEXT_DOC_NAMES = ["AGENTS.md", "CLAUDE.md"];
+const agentContext = (startDir) => {
+  const dir = normalizeAbs(startDir);
+  if (!isAllowedPath(dir)) return { docs: [], skills: [] };
+  const docs = [], skills = [];
+  for (const nm of CONTEXT_DOC_NAMES) {
+    const p = path.join(dir, nm);
+    try {
+      if (fs.statSync(p).isFile()) docs.push({ name: nm, rel: nm, content: fs.readFileSync(p, "utf8").slice(0, 6000) });
+    } catch {}
+  }
+  const skillsDir = path.join(dir, "skills");
+  try {
+    for (const e of fs.readdirSync(skillsDir, { withFileTypes: true })) {
+      if (!e.isDirectory() || isHidden(e.name)) continue;
+      const sp = path.join(skillsDir, e.name, "SKILL.md");
+      try {
+        const meta = parseSkill(fs.readFileSync(sp, "utf8"), e.name);
+        skills.push({ ...meta, rel: path.join("skills", e.name, "SKILL.md") });
+      } catch {}
+    }
+  } catch {}
+  return { docs, skills };
+};
+
 // 递归列出整棵树所有节点(给 ⌘P 快速打开用),跳过 IGNORE_DIRS / 隐藏。不读文件内容。
 const listAll = () => {
   const out = [];
@@ -261,8 +309,12 @@ const listChildren = (parentId) => {
     else if (isAgentFile(e.name)) out.push(agentItem(abs));
     else out.push(fileItem(abs));
   }
-  // 智能体排最前,然后文件夹,然后文件
-  const rank = (n) => (n.kind === "agent" ? 0 : n.kind === "space" ? 1 : 2);
+  // 排序:智能体最前 → 和 AI 相关的上下文(AGENTS.md / CLAUDE.md / skills 目录)→ 其它文件夹 → 其它文件
+  const isContextItem = (n) =>
+    (n.kind === "space" && n.title === "skills") ||
+    (n.kind === "file" && (n.title === "AGENTS.md" || n.title === "CLAUDE.md"));
+  const rank = (n) =>
+    n.kind === "agent" ? 0 : isContextItem(n) ? 1 : n.kind === "space" ? 2 : 3;
   out.sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title, undefined, { sensitivity: "base" }));
   out.forEach((n, i) => { n.position = i + 1; });
   return out;
@@ -476,6 +528,6 @@ const listWorkspaces = () => workspaceRows();
 export {
   ROOT, ensureRoot, IGNORE_DIRS,
   listChildren, listAll, getItem, createItem, updateItem, deleteItem, moveItem, ancestry,
-  markRead, unreadMap, agentDir, getAgent, createAgent, resolveFileAbs,
+  markRead, unreadMap, agentDir, getAgent, createAgent, resolveFileAbs, pathForId, agentContext,
   listWorkspaces, addWorkspace, removeWorkspace, isWorkspaceRoot, terminalCwd,
 };

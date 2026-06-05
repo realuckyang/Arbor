@@ -142,25 +142,9 @@ const tools = [
   {
     type: "function",
     function: {
-      name: "web_search",
-      description:
-        "联网搜索,返回前若干条结果(标题 + 链接 + 摘要)。拿到链接后可用 web_fetch 读正文。reason 是一句话摘要。",
-      parameters: {
-        type: "object",
-        properties: {
-          reason: { type: "string", description: "为什么搜(一句话摘要)" },
-          query:  { type: "string", description: "搜索关键词" },
-        },
-        required: ["reason", "query"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
       name: "web_fetch",
       description:
-        "抓取一个网页 URL,去掉标签返回可读正文(已截断)。配合 web_search 用来查资料。reason 是一句话摘要。",
+        "抓取一个网页 URL,去掉标签返回可读正文(已截断)。用来读一个已知链接的正文。reason 是一句话摘要。",
       parameters: {
         type: "object",
         properties: {

@@ -2,6 +2,7 @@
 // HTTP 层:只管解析请求 / 拼响应,业务都委托给 service。
 import fs from "fs";
 import nodePath from "path";
+import { execFile } from "child_process";
 import * as tree from "../service/tree.js";
 import { listMessages } from "../repo/messages.js";
 import { listCalls } from "../repo/calls.js";
@@ -31,6 +32,26 @@ const parseBody = async (req) => {
 const json = (res, code, data) => {
   res.writeHead(code, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(data, null, 2) + "\n");
+};
+
+// 静态文件 mime —— 给 /api/fs(按路径服务,供 HTML 预览解析相对资源)和 /api/file/raw 复用
+const MIME = {
+  ".html": "text/html", ".htm": "text/html",
+  ".css": "text/css", ".js": "text/javascript", ".mjs": "text/javascript",
+  ".json": "application/json", ".svg": "image/svg+xml",
+  ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+  ".gif": "image/gif", ".webp": "image/webp", ".ico": "image/x-icon",
+  ".bmp": "image/bmp", ".avif": "image/avif", ".pdf": "application/pdf",
+  ".txt": "text/plain", ".md": "text/plain",
+};
+const serveFile = (res, abs) => {
+  const type = MIME[nodePath.extname(abs).toLowerCase()] || "application/octet-stream";
+  const textish = type.startsWith("text/") || type.endsWith("json") || type.endsWith("svg+xml");
+  res.writeHead(200, {
+    "Content-Type": textish ? `${type}; charset=utf-8` : type,
+    "Cache-Control": "no-cache",
+  });
+  res.end(fs.readFileSync(abs));
 };
 
 const handleApi = async (req, res) => {
@@ -156,7 +177,11 @@ const handleApi = async (req, res) => {
       const callerId = url.searchParams.get("callerId") || undefined;
       const calleeId = url.searchParams.get("calleeId") || undefined;
       const status = url.searchParams.get("status") || undefined;
-      return json(res, 200, { ok: true, calls: listCalls({ callerId, calleeId, status }) });
+      const titleOf = (id) => { if (!id) return null; try { const it = tree.getItem(id); return it ? it.title : null; } catch { return null; } };
+      const calls = listCalls({ callerId, calleeId, status }).map((c) => ({
+        ...c, callerTitle: titleOf(c.caller_id), calleeTitle: titleOf(c.callee_id),
+      }));
+      return json(res, 200, { ok: true, calls });
     }
 
     // ---- git ----
@@ -242,6 +267,31 @@ const handleApi = async (req, res) => {
       } catch (error) {
         return json(res, 404, { ok: false, error: error.message });
       }
+    }
+
+    // 在系统文件管理器里显示该节点(macOS Finder / Windows 资源管理器 / Linux 文件管理器)
+    if (path === "/api/reveal" && method === "POST") {
+      const abs = tree.pathForId(url.searchParams.get("id"));
+      if (!abs) return json(res, 404, { ok: false, error: "not found" });
+      const plt = process.platform;
+      let cmd, args;
+      if (plt === "darwin") { cmd = "open"; args = ["-R", abs]; }
+      else if (plt === "win32") { cmd = "explorer"; args = [`/select,${abs}`]; }
+      else { cmd = "xdg-open"; args = [nodePath.dirname(abs)]; }
+      execFile(cmd, args, () => {}); // 部分平台(如 explorer)成功也返回非 0,忽略
+      return json(res, 200, { ok: true, path: abs });
+    }
+
+    // 按路径服务工作区内文件(HTML 预览用 —— iframe 在 /api/fs/<dir>/index.html,
+    // 相对的 styles.css 自然解析到 /api/fs/<dir>/styles.css)。仅限工作区根内的文件。
+    if (path.startsWith("/api/fs/") && method === "GET") {
+      let abs;
+      try { abs = decodeURIComponent(path.slice("/api/fs".length)); }
+      catch { abs = path.slice("/api/fs".length); }
+      const real = tree.fileRawAbs(abs);
+      if (!real) return json(res, 404, { ok: false, error: "not found" });
+      serveFile(res, real);
+      return;
     }
 
     if (path.startsWith("/api/")) return json(res, 404, { ok: false, error: "Not found" });

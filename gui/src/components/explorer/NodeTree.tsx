@@ -3,7 +3,10 @@ import type { GitRepositoryStatus, Node } from "../../api";
 import { api } from "../../api";
 import { NodeRow, InlineCreateRow, iconFor, colorFor, type TreeControls } from "./NodeRow";
 import { ContextMenu, type MenuItem } from "../ui";
-import { Settings, Folder, FolderPlus, FileText, Bot, Trash2, Pencil, Plus, X, Copy, PanelRight, Terminal, GitBranch } from "lucide-react";
+import { Settings, Folder, FolderPlus, FolderOpen, FileText, Bot, Trash2, Pencil, Plus, X, Copy, PanelRight, Terminal, GitBranch, Radio } from "lucide-react";
+
+const REVEAL_LABEL = /Mac/i.test(navigator.platform) ? "在 Finder 中显示"
+  : /Win/i.test(navigator.platform) ? "在资源管理器中显示" : "在文件管理器中显示";
 import { DndContext, DragOverlay, useDroppable } from "@dnd-kit/core";
 import { useTreeDnd, ROOT_ID } from "./useTreeDnd";
 import { AddWorkspaceDialog } from "./AddWorkspaceDialog";
@@ -18,6 +21,8 @@ export function NodeTree({
   refreshKey,
   settingsActive,
   onOpenSettings,
+  activityActive,
+  onOpenActivity,
   mobileOpen = false,
   desktopOpen = true,
   onCloseMobile,
@@ -32,6 +37,8 @@ export function NodeTree({
   refreshKey: number;
   settingsActive: boolean;
   onOpenSettings: () => void;
+  activityActive?: boolean;
+  onOpenActivity?: () => void;
   mobileOpen?: boolean;
   desktopOpen?: boolean;
   onCloseMobile?: () => void;
@@ -239,6 +246,7 @@ export function NodeTree({
           }
         },
       },
+      { label: REVEAL_LABEL, icon: <FolderOpen size={13} />, onClick: () => { api.revealNode(node.id).catch(() => {}); } },
       "divider",
       { label: "打开终端", icon: <Terminal size={13} className="text-success" />,
         onClick: () => onOpenTerminal?.(node), disabled: !onOpenTerminal },
@@ -289,6 +297,10 @@ export function NodeTree({
   const handleSelect = (n: Node | null) => {
     onSelect(n);
     if (mobileOpen && n?.kind !== "space") onCloseMobile?.();
+  };
+  const handleToggleActivity = () => {
+    onOpenActivity?.();
+    if (mobileOpen) onCloseMobile?.();
   };
   const handleToggleSettings = () => {
     onOpenSettings();
@@ -380,17 +392,28 @@ export function NodeTree({
         </RootDroppable>
 
         {/* footer */}
-        <div className="border-t border-border px-1.5 py-1.5">
+        <div className="border-t border-border px-1.5 py-1.5 flex items-center gap-1">
+          <button
+            onClick={handleToggleActivity}
+            title="活动:智能体之间的调用"
+            className={[
+              "flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-[13px] transition-colors",
+              activityActive ? "bg-bg-inset text-text" : "text-text-dim hover:bg-bg-hover hover:text-text",
+            ].join(" ")}
+          >
+            <Radio size={13} />
+            <span>活动</span>
+          </button>
           <button
             onClick={handleToggleSettings}
-            title="Settings"
+            title="设置"
             className={[
-              "w-full flex items-center gap-2 px-2 py-1.5 rounded text-[14px] transition-colors",
+              "flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-[13px] transition-colors",
               settingsActive ? "bg-bg-inset text-text" : "text-text-dim hover:bg-bg-hover hover:text-text",
             ].join(" ")}
           >
             <Settings size={13} />
-            <span>Settings</span>
+            <span>设置</span>
           </button>
         </div>
 

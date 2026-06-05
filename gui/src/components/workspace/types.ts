@@ -5,6 +5,7 @@ export const TERMINAL_TAB_PREFIX = "__terminal__";
 export const GIT_TAB_PREFIX = "__git__";
 export const GIT_DIFF_TAB_PREFIX = "__git_diff__";
 export const SETTINGS_TAB_ID = "__settings__";
+export const ACTIVITY_TAB_ID = "__activity__";
 
 export type ProcessTab = {
   id: typeof PROCESS_TAB_ID;
@@ -42,7 +43,13 @@ export type SettingsTab = {
   title: "设置";
 };
 
-export type WorkspaceTab = Node | ProcessTab | TerminalTab | GitTab | GitDiffTab | SettingsTab;
+export type ActivityTab = {
+  id: typeof ACTIVITY_TAB_ID;
+  kind: "activity";
+  title: "活动";
+};
+
+export type WorkspaceTab = Node | ProcessTab | TerminalTab | GitTab | GitDiffTab | SettingsTab | ActivityTab;
 export type WorkspaceGroupId = "main" | "side";
 
 export type WorkspaceGroupState = {
@@ -88,6 +95,12 @@ export const settingsTab = (): SettingsTab => ({
   title: "设置",
 });
 
+export const activityTab = (): ActivityTab => ({
+  id: ACTIVITY_TAB_ID,
+  kind: "activity",
+  title: "活动",
+});
+
 export const isProcessTab = (tab: WorkspaceTab | null | undefined): tab is ProcessTab =>
   tab?.kind === "process";
 
@@ -103,8 +116,11 @@ export const isGitDiffTab = (tab: WorkspaceTab | null | undefined): tab is GitDi
 export const isSettingsTab = (tab: WorkspaceTab | null | undefined): tab is SettingsTab =>
   tab?.kind === "settings";
 
+export const isActivityTab = (tab: WorkspaceTab | null | undefined): tab is ActivityTab =>
+  tab?.kind === "activity";
+
 export const isNodeTab = (tab: WorkspaceTab | null | undefined): tab is Node =>
-  !!tab && tab.kind !== "process" && tab.kind !== "terminal" && tab.kind !== "git" && tab.kind !== "git-diff" && tab.kind !== "settings";
+  !!tab && tab.kind !== "process" && tab.kind !== "terminal" && tab.kind !== "git" && tab.kind !== "git-diff" && tab.kind !== "settings" && tab.kind !== "activity";
 
 export const isOpenableSpace = (node: Node | null | undefined): node is Node =>
   !!node && node.kind !== "space";

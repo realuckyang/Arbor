@@ -34,6 +34,7 @@ export function FilePanel({
   const isImage = IMAGE_EXT.has(ext);
   const isPdf = ext === "pdf";
   const isMarkdown = ext === "md" || ext === "markdown";
+  const isHtml = ext === "html" || ext === "htm";
   const rawUrl = `/api/file/raw?id=${encodeURIComponent(node.id)}&v=${refreshKey}`;
 
   const [mdMode, setMdMode] = useState<"preview" | "edit">("preview");
@@ -112,8 +113,8 @@ export function FilePanel({
     />
   );
 
-  // Markdown:预览/编辑切换
-  if (isMarkdown) {
+  // Markdown / HTML:预览(渲染)/ 源码切换
+  if (isMarkdown || isHtml) {
     return (
       <div className="flex-1 min-h-0 flex flex-col bg-bg relative">
         <div className="absolute top-2 right-3 z-10 flex rounded-md border border-border bg-bg-raised overflow-hidden">
@@ -121,15 +122,26 @@ export function FilePanel({
             className={`px-2 py-1 ${mdMode === "preview" ? "bg-accent text-white" : "text-text-dim hover:bg-bg-hover"}`}>
             <Eye size={13} />
           </button>
-          <button onClick={() => setMdMode("edit")} title="编辑"
+          <button onClick={() => setMdMode("edit")} title="源码"
             className={`px-2 py-1 ${mdMode === "edit" ? "bg-accent text-white" : "text-text-dim hover:bg-bg-hover"}`}>
             <Code2 size={13} />
           </button>
         </div>
         {mdMode === "preview" ? (
-          <div className="flex-1 overflow-auto px-6 md:px-12 py-8">
-            <div className="prose max-w-3xl mx-auto" dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} />
-          </div>
+          isHtml ? (
+            // 按路径服务,iframe 内相对的 styles.css/js 能正确解析;沙箱里跑,与父页隔离
+            <iframe
+              key={refreshKey}
+              src={`/api/fs${encodeURI(node.id)}`}
+              title={node.title}
+              sandbox="allow-scripts allow-popups allow-forms"
+              className="flex-1 min-h-0 w-full border-0 bg-white"
+            />
+          ) : (
+            <div className="flex-1 overflow-auto px-6 md:px-12 py-8">
+              <div className="prose max-w-3xl mx-auto" dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} />
+            </div>
+          )
         ) : editor}
       </div>
     );
