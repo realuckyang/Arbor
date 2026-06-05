@@ -62,7 +62,7 @@ export function WorkspaceLayout({
         <WorkspaceGroup
           key={group.id}
           group={group}
-          active={group.id === activeGroupId}
+          active={groups.length > 1 && group.id === activeGroupId}
           socket={socket}
           dirtyIds={dirtyIds}
           drafts={drafts}

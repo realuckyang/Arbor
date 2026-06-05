@@ -21,7 +21,7 @@ import { getSettings } from "../repo/settings.js";
 import { getDb } from "../db.js";
 import { emit } from "../bus.js";
 
-// 一个对话所在的空间 id(create_agent 据此把新对话建在同一空间)= 它的父空间路径
+// 一个对话所在的文件夹 id(create_agent 据此把新对话建在同一文件夹)= 它的父文件夹路径
 const spaceIdOf = (conversationId) => {
   const c = getConversation(conversationId);
   return c?.parent_id || null;
@@ -46,25 +46,25 @@ const buildSystem = (conversation, settings) => {
   return `${base}
 
 # 你是谁
-- 你是一个对话(conversation),活在一棵「空间树」里。空间 = 目录,文件 = 真实文件,对话 = <uuid>.conv.json。
+- 你是一个对话(conversation),活在一棵「文件夹树」里。文件夹 = 目录,文件 = 真实文件,对话 = <uuid>.conv.json。
 - conversation id: ${conversation.id}
 - 路径:           ${path}
 - 你的工作目录(你的 shell 就在这里执行,东西都建在这里):
   ${cwd}
 
 # 工具
-- shell(command)                       — 在工作目录里跑会结束的命令;建目录=新空间
+- shell(command)                       — 在工作目录里跑会结束的命令;建目录=新文件夹
 - run_process(command)                 — 启动后台进程/dev server/watch,不阻塞;日志和预览 URL 可在进程面板看到
 - list_processes / read_process_output / stop_process — 查看/读取/停止后台进程
 - read_file / edit_file / write_file   — 读单文件(带行号)/ 精确替换 / 新建或整体重写(改文件首选这三个,别用 shell sed)
 - web_search / web_fetch               — 联网搜索 + 抓网页正文,用来查资料
-- create_agent(title, message?, ...)   — 异步:在你所在空间里派生一个兄弟对话,可附初始消息
+- create_agent(title, message?, ...)   — 异步:在你所在文件夹里派生一个兄弟对话,可附初始消息
 - call_agent(conversation_id, message) — 异步:给已存在的对话发消息
 
 文件类工具的相对路径都相对你上面那个工作目录。
 
 # 约定
-- 要建文件/目录,直接用 shell(相对路径即可,cwd 就是上面那个工作目录)。子目录会自动成为子空间。
+- 要建文件/目录,直接用 shell(相对路径即可,cwd 就是上面那个工作目录)。子目录会自动成为子文件夹。
 - 要启动网站/服务/监听进程,必须用 run_process,不要用 shell 跑前台服务。
 - 不要去动别的对话的 .conv.json;跟它们交互用 call_agent。
 
