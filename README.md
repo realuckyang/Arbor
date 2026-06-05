@@ -1,120 +1,81 @@
 # Arbor 🌳
 
-**一棵会自己生长的 agent 树。**
+> 对话 = 一个 agent = 树上的一个节点。
 
 ![Arbor — 左侧工作树 · 中间落地页预览 · 右侧多智能体协作](docs/screenshot.png)
 
-每个智能体是树上的一个 agent;文件夹把智能体无限嵌套地组织起来;智能体之间可以异步互相说话;每个智能体有一块自己的真实工作目录,AI 在里面长出文件、跑命令、建项目。整个系统跑在你自己机器上,默认监听 9506 端口。
+我认为这个项目主要有这几个亮点:
 
-不是另一个 agent 框架。是一个把 **「智能体 = 树上的一个节点」** 这个想法做到底的实验内核 —— 全栈一万行级别,能完全读懂。
+## 一、对话即 agent,彼此通讯
+
+目前,我们在 ChatGPT、Claude 上的历史对话大多都是沉寂的,但其实每个对话历史就是一个已经有上下文的 AI 智能体,本项目让它们之间彼此感知,相互通讯。
+
+## 二、异步调用
+
+实现也很简单:`call` 工具往另一个 agent 的消息记录里 push 一条消息,然后立即返回——不等它跑完,所以不会阻塞你自己这边的对话。对方在后台执行,跑完后,系统把它的结果作为一条新消息投回调用方的消息里,并自动唤醒调用方接着处理。所以整个调用是异步的。
+
+## 三、树形组织
+
+再然后,我们用树形结构把这些智能体组织起来,这样你可以有组织地、有层级地放置这些智能体,每个智能体都可以感受到自己的环境信息、指导文件、技能。
 
 ---
 
-## 🧠 核心理念
+下面再多说一点。
 
-> **智能体即 Agent。文件夹组织智能体。文件系统就是这棵树。**
+## 每个 agent,有一块真实的工作目录
 
-一棵树,三种东西:
+agent 所在的文件夹,就是它的工作目录,它的 `shell`、读写文件都在这里执行。你让它「做个网页放这」,它会真的 `write_file`、跑命令,在目录里长出 `index.html`——这个文件随即出现在左侧的树里,可点开、可编辑、可预览。AI 产出的是真实文件,而不是对话框里的一段代码。
 
-- 📁 **文件夹(space)** —— 唯一会无限自嵌套的容器,用来给智能体/文件分组
-- 💬 **智能体(agent)** —— 活的 agent:有人格、有邮箱、有一块自己的工作目录
-- 📄 **文件(file)** —— 真实文件,AI 或你建出来的产物
+## 它如何存储:文件系统即真相
 
-**结构不在数据库里,而在文件系统里**(`workspaces/` 这个 app 自管的根目录):
+结构不在数据库里,而在文件系统里(`workspaces/` 这个由 app 自管的根目录,它自行生长,你不导入既有目录):
 
 ```
-workspaces/                  ← app 托管根(你永远不导入已有目录,它自己长出来)
-  研究/                      ← 文件夹 = 真实目录
-    a1b2….agent.json          ← 智能体 = 一个元数据文件(人格 / 已读位置 / 创建时间)
-    notes.md                 ← 文件 = 真实文件
-    src/  app.js             ← AI 用 shell 建的嵌套结构,天然就是树的一部分
-    子文件夹/                ← 嵌套 = 子目录,无限深
+workspaces/
+  研究/                       ← 文件夹 = 真实目录
+    a1b2….agent.json          ← 智能体 = 一份元数据(人格 / 已读位置 / 创建时间)
+    notes.md                  ← 文件 = 真实文件
+    src/  app.js              ← AI 用 shell 建的嵌套结构,本就是树的一部分
+    子文件夹/                 ← 嵌套 = 子目录,可无限深
 ```
 
-SQLite 只存**运行时状态**(不存结构):
+一句 `ls` 就能看清整棵树。SQLite 只承载运行时状态,不存结构:
 
-| 表 | 维度 |
+| 表 | 内容 |
 |---|---|
-| **`messages`** | 每个智能体的邮箱(`agent_id` = 智能体的 uuid) |
-| **`calls`** | 智能体之间的调用关系 + 状态机(`pending / running / done / error / cancelled`) |
-| **`settings`** | 模型 / key / 默认 system prompt |
+| `messages` | 每个智能体的消息流(`agent_id` = 智能体的 uuid) |
+| `calls` | 智能体之间的调用关系 + 状态机(`pending / running / done / error / cancelled`) |
+| `settings` | 模型 / key / 默认 system prompt |
 
-**id 规则**:文件夹/文件 = 相对路径(改名移动即变,前端重拉树,无需 fs↔DB 同步);智能体 = uuid(稳定,`call_agent` 靠它寻址)。
+**id 规则**:文件夹与文件用路径(改名、移动即变,前端重新拉取,无需 fs↔DB 同步);智能体用 uuid(稳定,`call_agent` 凭它寻址)。
 
----
-
-## ✨ 能做什么
-
-- 🌲 **无限嵌套的工作树** —— 文件夹套文件夹,智能体/文件自由放置,深度无限
-- 🤖 **智能体 = 一块真实工作目录** —— 每个智能体的 `shell`/文件工具都在它所在文件夹里执行;AI 建的文件、子目录直接出现在树里、可点开/编辑/运行
-- 📨 **异步 actor 通信** —— `call_agent` / `create_agent` 调出去立即返回,对方跑完结果作为新消息进自己邮箱,自动被唤醒
-- 🌊 **流式输出** —— LLM token 实时蹦出来,带闪烁光标;支持 OpenAI / DeepSeek(含 reasoning) / Kimi / Gemini,任意 OpenAI 兼容接口
-- 🧩 **VSCode 式 GUI** —— 多标签、CodeMirror 代码编辑(按扩展名高亮)、Markdown 预览、图片/PDF 预览、⌘P 快速打开、⌘⇧F 全局搜索、⌘⇧P 命令面板
-- 🌳 **跨设备拖拽** —— dnd-kit 三 sensor(鼠标 / 触摸 / 键盘),桌面和手机一套代码
-- 🟢 **未读 / 运行状态点** —— 智能体跑起来闪蓝点;有未读亮绿点;打开自动标记已读
-- ⚙️ **可停止任何智能体** —— 包括子树深处的;`stopAgent(id)` 对任意层级生效
-
----
-
-## 🛠 8 个工具
+## agent 手里的工具(11 个)
 
 | 工具 | 用途 |
 |---|---|
-| `shell(command, reason)` | 在你的工作目录里执行**任意**命令 —— 全功能、无超时;建目录=新文件夹、跑构建/服务都在这 |
-| `read_file / edit_file / write_file` | 带行号读 / 精确替换 / 带护栏写(改文件首选,比 shell sed 可靠省 token) |
-| `web_fetch` | 抓取一个已知网页链接的正文(去标签返回可读文本) |
-| `create_agent(title, message?, system?, reason)` | 在你所在文件夹下派生一个兄弟智能体;可附初始消息(异步) |
-| `call_agent(agent_id, message, reason)` | 给已存在的智能体发消息(异步,结果回到自己邮箱) |
+| `shell` | 在工作目录里执行**任意**命令——全功能,建目录、跑构建都在此 |
+| `run_process` | 启动后台进程 / dev server / watch,不阻塞;日志与预览 URL 进入进程面板 |
+| `list_processes` · `read_process_output` · `stop_process` | 查看 / 读取 / 停止后台进程 |
+| `read_file` · `edit_file` · `write_file` | 带行号读 / 精确替换 / 整体重写(改文件首选这三个,比 shell sed 稳且省 token) |
+| `web_fetch` | 抓取一个网页链接的正文,返回可读文本 |
+| `create_agent` | 在当前文件夹下派生一个兄弟智能体,可附初始消息(异步) |
+| `call_agent` | 向已存在的智能体发消息(异步,结果回到自己的消息流) |
 
-`reason` 字段是给 UI 用的一句话摘要 —— 工具块默认折叠只显示它,点开看完整参数 + 结果。给 LLM 的工具结果上限约 32k 字符(再大纯浪费 token)。
+> ⚠️ `shell` 在**你本机**执行任意命令、**无沙箱**——这是本地 agent 工具的常态。只在你信任的机器、对你信任的模型使用。
 
-> ⚠️ `shell` 在**你本机**执行任意命令,没有沙箱 —— 这是本地 agent 工具的常态。只在你信任的机器上、对你信任的模型用。
+## 用起来什么感觉
 
----
+前端是一套 VSCode 式的本地 GUI,常用的都顺手:
 
-## 🏗 架构
+- **流式输出**,逐字实时呈现,带光标;支持任意 OpenAI 兼容接口(OpenAI / DeepSeek / Kimi / Gemini…)
+- **多标签 + 左右分屏**;代码按扩展名高亮(CodeMirror);Markdown / HTML / 图片 / PDF 直接在标签内预览
+- **⌘P 快速打开 · ⌘⇧F 全局搜索 · ⌘⇧P 命令面板**
+- agent 运行时亮起**蓝点**、有未读则亮**绿点**,一眼看出谁在忙
+- 让某个 agent 起 dev server,`run_process` 会自动识别**预览 URL**,旁边开个面板即可看效果
+- 内置**终端**(可在某个 agent 的目录里直接拉起 codex / claude code)与一个 **Git 面板**
+- 拖拽基于 dnd-kit 三 sensor(鼠标 / 触摸 / 键盘),**桌面与手机共用一套代码**
 
-分层清晰:**api(HTTP)→ service(业务)→ repo(数据)**,另有 agent(无状态 LLM 执行器)。
-
-```
-server/
-├── agent/                 ← 🧠 无状态 LLM 执行器(不 import 任何 server 状态)
-│   ├── index.ts           ← chat() 入口(tool_call ↔ tool_result 循环)
-│   ├── runner.ts          ← tool 分派
-│   ├── tools.ts           ← 8 工具 schema
-│   ├── functions.ts       ← 8 工具实现(文件类工具相对智能体的工作目录解析)
-│   ├── utils.ts           ← 工具结果截断
-│   └── lm/                ← LLM 调用层(common / regular / stream/parsers·openai·deepseek·kimi·gemini)
-├── service/               ← 🎬 业务层
-│   ├── tree.ts            ← 树操作 + 事件广播(tree_changed)+ 给智能体富化状态/未读
-│   └── agent.ts           ← 智能体编排(拼 prompt、注入工作目录、落库、回信、唤醒 caller、call 状态机)
-├── repo/                  ← 💾 纯数据访问
-│   ├── tree.ts            ← 文件系统即树(文件夹/文件/智能体 ↔ 目录/文件/.agent.json)
-│   ├── search.ts          ← 全局内容 grep
-│   └── messages.ts / calls.ts / settings.ts
-├── api/index.ts           ← 🌐 HTTP(薄,只解析请求/拼响应,业务委托 service)
-├── realtime.ts            ← 📡 WebSocket(broadcast / stop / send)
-└── bus.ts / db.ts / http.ts / static.ts
-gui/src/components/        ← React 19 前端,按 UI 区域分模块
-├── explorer/              ← 左侧树:NodeTree / NodeRow(dnd 抽成 useTreeDnd hook)
-├── workspace/             ← 编辑器外壳:TabBar / TabContent / useTabGroups + panels/(Process·Terminal·Git·GitDiff·Empty 等 tab 内容)
-├── command/              ← ⌘P 快开 / ⌘⇧P 命令面板 / ⌘⇧F 搜索
-└── chat · files · settings · ui ← 智能体对话 / 文件编辑 / 设置 / 共享原语(TabContent 按 tab.kind 装配)
-```
-
-**关键边界**:`agent/` 不知道树是什么 —— 只接收已组装好的消息和 `ctx`(含工作目录 cwd)跑 LLM 循环;`service/` 承载业务(事件、状态、编排);`repo/` 只做纯数据访问;`api/` 只管 HTTP。
-
----
-
-## 🛠 技术栈
-
-Node 22+ · TypeScript · `node:sqlite`(内置,零外部数据库依赖)· React 19 · Tailwind 4 · Vite · CodeMirror 6 · @dnd-kit · ws · marked
-
-结构在文件系统(`workspaces/`),运行时状态在单文件 `database/arbor.db`。
-
----
-
-## 🚀 快速开始
+## 跑起来
 
 ```bash
 git clone https://github.com/realuckyang/Arbor
@@ -125,74 +86,43 @@ npm install
 npm run dev          # 后端,tsx watch,端口 9506
 npm run gui          # 前端,vite dev,端口 5174(代理到 9506)
 
-# 生产(构建 GUI,单端口跑全部)
+# 生产(构建 GUI,单端口运行)
 npm run build        # vite build → gui/dist
 npm start            # 后端 + GUI 同端口 http://localhost:9506
 ```
 
-打开 **http://localhost:5174/**(开发):
+开发模式打开 **http://localhost:5174/**:
+
 1. 左下角 ⚙ Settings → 填 API URL / API Key / Model(任何 OpenAI 兼容接口)
-2. 左侧 `＋` → 新建智能体
-3. 发消息试试 —— 让它「建个网页放在这」,看它用 `shell`/`write_file` 在智能体的工作目录里长出文件,直接出现在树里
+2. 左侧 `＋` → 新建一个智能体
+3. 发条消息试试——让它「做个网页放这」,看它在自己的工作目录里长出文件,直接出现在树里
 
----
+## 技术栈
 
-## 📡 API
+Node 22+ · TypeScript · `node:sqlite`(内置,零外部数据库依赖)· React 19 · Tailwind 4 · Vite · CodeMirror 6 · @dnd-kit · ws
 
-| 资源 | 方法 + 路径 | 说明 |
-|---|---|---|
-| 心跳 | `GET /health` | |
-| 实时 | `WS /api/ws` | 事件:`message / delta / end / error / tree_changed / call_changed / usage`;指令:`subscribe / unsubscribe / send / stop` |
-| 树 | `GET/POST/PATCH/DELETE /api/tree` | 统一树:文件夹/智能体/文件,按 `kind` 派发 |
-| 单项 | `GET /api/tree/get?id=X` · `POST /api/tree/read?id=X` | 取一项 / 标记智能体已读 |
-| 全树 | `GET /api/tree/all` | 扁平列表(⌘P 快开) |
-| 搜索 | `GET /api/search?q=X` | grep 真实文件内容 |
-| 原始文件 | `GET /api/file/raw?id=X` | 图片/PDF 等二进制流 |
-| 面包屑 | `GET /api/ancestry?id=X` | 从根到当前 |
-| 消息 | `GET /api/messages?agentId=X` | 单智能体邮箱 |
-| 调用 | `GET /api/calls?callerId=&calleeId=&status=` | 智能体间调用关系/状态 |
-| 设置 | `GET / POST /api/settings` | 模型、key、system |
+## 想读代码——架构
 
----
-
-## 🧭 一次端到端流程
+分层清晰:**api(HTTP)→ service(业务)→ repo(数据)**,另有 `agent/`(无状态 LLM 执行器)。
 
 ```
-用户在 智能体 A 发消息
-  ├ ws: send → realtime → runAgent(A)
-  ├ agent: 拼 system(注入 A 的工作目录 + 8 工具)
-  ├ agent: chat() 循环
-  │   ├ LLM 流式 → ws emit('delta') → 前端实时渲染
-  │   └ 收到 tool_calls:
-  │       ├ write_file('app.js', …) → A 工作目录里建出真实文件 → tree_changed → 树刷新
-  │       └ call_agent(B, '…')       → 异步唤醒 B,立即返回
-  ├ A 跑完 → done → 落库 → ws emit('end')
-  └ B 跑完 → 结果包成 [CALL_RESULT] 投进 A 邮箱
-     → 自动 runAgent(A) → A 看到回信继续处理
+server/
+├── agent/        🧠 无状态 LLM 执行器(不依赖任何 server 状态)——chat() 循环 / 工具 schema 与实现 / 多 provider 流式
+├── service/      🎬 业务层——tree.ts(树操作 + 事件)/ agent.ts(拼 prompt、注入工作目录、回信、唤醒调用方)
+├── repo/         💾 纯数据访问——tree.ts(文件系统即树)/ messages / calls / settings / search
+├── api/          🌐 HTTP(很薄,只解析请求、拼响应,业务交给 service)
+└── realtime.ts   📡 WebSocket(send / stop / 广播)
+gui/src/components/   React 前端,按 UI 区域分模块:explorer(树)/ workspace(编辑器外壳 + panels)/ command / chat / files / settings / ui
 ```
 
-一个智能体写消息、一个智能体调另一个智能体、一个智能体派生子智能体 —— 在底层都是 `appendMessage(id, msg) + runAgent(id)`。
+`agent/` 不知道树是什么,只接收组装好的消息和 `ctx`(含工作目录 cwd)运行 LLM 循环;状态全在 `service` / `repo`。一万行出头,可以完整读完。
 
----
+## 几句实话
 
-## 🎯 适合 / 不适合
+- `shell` 全功能、**无沙箱**,只在你信任的机器、对你信任的模型使用。
+- 提示词与注释**均为中文**,不习惯的话需要适应。
+- 它是实验性的,不面向生产。
 
-**适合**:想搞多 agent 实验、本地工作树式 agent 工具;喜欢 Actor 模型、自指结构、最小内核;想要一份能完全读懂的 agent 代码。
-
-**不适合**:期望生产级稳定性 / SLA;大规模分布式 agent 调度(这是个本地内核);不想看到任何中文提示词/注释 😄。
-
----
-
-## 🗺 路线图
-
-- [ ] 子智能体调用嵌入 chat 流(展开看子调用)
-- [ ] 把树里的文件拖进聊天框引用
-- [ ] 多模型 router(按智能体的 system 选不同 model)
-- [ ] 工作目录的 diff / git 集成
-- [ ] OpenAPI 工具桥(把外部 API 当工具暴露给智能体)
-
----
-
-## 📜 License
+## License
 
 MIT
