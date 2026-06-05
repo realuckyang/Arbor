@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSocket } from "./ws";
 import { api, type Settings as AppSettings, type Space } from "./api";
 import type { ActivityId } from "./components/activity";
@@ -76,7 +76,7 @@ export function App() {
   const onSettingsSaved = (settings: AppSettings) => {
     setShowActivityBar(!!settings.showActivityBar);
   };
-  const refreshGit = () => setGitRefreshKey((n) => n + 1);
+  const refreshGit = useCallback(() => setGitRefreshKey((n) => n + 1), []);
   const openActivity = (id: ActivityId) => {
     setActiveActivity(id);
     if (window.matchMedia("(min-width: 768px)").matches) {
@@ -101,6 +101,7 @@ export function App() {
   // 标签与 WS 联动:重命名/删除时同步标签
   useEffect(() => {
     const off = socket.on("tree_changed", (p: any) => {
+      refreshGit();
       setFileRefreshKeys((prev) => {
         let changed = false;
         const next = { ...prev };
@@ -119,7 +120,7 @@ export function App() {
       }
     });
     return off;
-  }, [socket, tabGroups.removeSpaceTab, tabGroups.updateSpaceTab]);
+  }, [refreshGit, socket, tabGroups.removeSpaceTab, tabGroups.updateSpaceTab]);
 
   // 后台进程:用于预览面板入口和自动打开第一条可预览服务
   useEffect(() => {
@@ -263,7 +264,10 @@ export function App() {
         mobileOpen={mobileNavOpen}
         desktopOpen={desktopNavOpen}
         onCloseMobile={closeNav}
-        onChanged={() => setTreeRefresh((n) => n + 1)}
+        onChanged={() => {
+          setTreeRefresh((n) => n + 1);
+          refreshGit();
+        }}
       />
 
       {quickOpen && <QuickOpen onPick={(n) => openNode(n)} onClose={() => setQuickOpen(false)} />}
@@ -284,6 +288,7 @@ export function App() {
           drafts={drafts}
           fileRefreshKeys={fileRefreshKeys}
           pendingGoto={pendingGoto}
+          gitRefreshKey={gitRefreshKey}
           onFocusGroup={tabGroups.focusGroup}
           onActivateTab={tabGroups.activateTab}
           onCloseTab={tabGroups.closeTab}

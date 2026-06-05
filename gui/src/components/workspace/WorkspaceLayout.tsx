@@ -41,6 +41,7 @@ export function WorkspaceLayout({
   drafts,
   fileRefreshKeys,
   pendingGoto,
+  gitRefreshKey,
   onFocusGroup,
   onActivateTab,
   onCloseTab,
@@ -67,6 +68,7 @@ export function WorkspaceLayout({
   drafts: Record<string, string>;
   fileRefreshKeys: Record<string, number>;
   pendingGoto: { id: string; line: number } | null;
+  gitRefreshKey: number;
   onFocusGroup: (groupId: WorkspaceGroupId) => void;
   onActivateTab: (groupId: WorkspaceGroupId, id: string) => void;
   onCloseTab: (groupId: WorkspaceGroupId, id: string) => void;
@@ -227,6 +229,7 @@ export function WorkspaceLayout({
               drafts={drafts}
               fileRefreshKeys={fileRefreshKeys}
               pendingGoto={pendingGoto}
+              gitRefreshKey={gitRefreshKey}
               showNavButton={index === 0}
               showSideToggle={index === groups.length - 1}
               sideOpen={sideOpen}

@@ -19,6 +19,7 @@ export function TabContent({
   drafts,
   fileRefreshKeys,
   pendingGoto,
+  gitRefreshKey,
   onFileChange,
   onFileSaved,
   onSelect,
@@ -34,6 +35,7 @@ export function TabContent({
   drafts: Record<string, string>;
   fileRefreshKeys: Record<string, number>;
   pendingGoto: { id: string; line: number } | null;
+  gitRefreshKey: number;
   onFileChange: (id: string, value: string) => void;
   onFileSaved: (id: string) => void;
   onSelect: (n: Space) => void;
@@ -55,7 +57,7 @@ export function TabContent({
   }
 
   if (isGitDiffTab(tab)) {
-    return <GitDiffPanel tab={tab} onChanged={onGitChanged} />;
+    return <GitDiffPanel tab={tab} refreshKey={gitRefreshKey} onChanged={onGitChanged} />;
   }
 
   if (isSettingsTab(tab)) {

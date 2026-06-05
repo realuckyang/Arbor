@@ -6,10 +6,11 @@ import type { GitDiffTab } from "./types";
 
 type GitDiffPanelProps = {
   tab: GitDiffTab;
+  refreshKey?: number;
   onChanged?: () => void;
 };
 
-export function GitDiffPanel({ tab, onChanged }: GitDiffPanelProps) {
+export function GitDiffPanel({ tab, refreshKey = 0, onChanged }: GitDiffPanelProps) {
   const [diff, setDiff] = useState("");
   const [fileStatus, setFileStatus] = useState<GitFileStatus | null>(null);
   const [loading, setLoading] = useState(false);
@@ -36,7 +37,7 @@ export function GitDiffPanel({ tab, onChanged }: GitDiffPanelProps) {
     }
   };
 
-  useEffect(() => { load(); }, [tab.root, tab.path, tab.staged]);
+  useEffect(() => { load(); }, [tab.root, tab.path, tab.staged, refreshKey]);
 
   const lines = useMemo(() => diff.split(/\r?\n/), [diff]);
   const canStage = !tab.staged && fileStatus?.status !== "conflict" && !!(fileStatus?.unstaged || fileStatus?.status === "untracked");

@@ -19,6 +19,7 @@ export function WorkspaceGroup({
   drafts,
   fileRefreshKeys,
   pendingGoto,
+  gitRefreshKey,
   showNavButton,
   showSideToggle,
   sideOpen,
@@ -47,6 +48,7 @@ export function WorkspaceGroup({
   drafts: Record<string, string>;
   fileRefreshKeys: Record<string, number>;
   pendingGoto: { id: string; line: number } | null;
+  gitRefreshKey: number;
   showNavButton?: boolean;
   showSideToggle?: boolean;
   sideOpen: boolean;
@@ -106,6 +108,7 @@ export function WorkspaceGroup({
           drafts={drafts}
           fileRefreshKeys={fileRefreshKeys}
           pendingGoto={pendingGoto}
+          gitRefreshKey={gitRefreshKey}
           onFileChange={onFileChange}
           onFileSaved={onFileSaved}
           onSelect={onSelect}
