@@ -50,8 +50,32 @@ const handleApi = async (req, res) => {
         }
       }
       if (method === "DELETE") {
-        tree.remove(url.searchParams.get("id"));
-        return json(res, 200, { ok: true });
+        try {
+          tree.remove(url.searchParams.get("id"));
+          return json(res, 200, { ok: true });
+        } catch (error) {
+          return json(res, 400, { ok: false, error: error.message });
+        }
+      }
+    }
+
+    // ---- workspaces(root folders)----
+    if (path === "/api/workspaces") {
+      if (method === "GET") return json(res, 200, { ok: true, workspaces: tree.listWorkspaces() });
+      if (method === "POST") {
+        const body = await parseBody(req);
+        try {
+          return json(res, 201, { ok: true, item: tree.addWorkspace(body) });
+        } catch (error) {
+          return json(res, 400, { ok: false, error: error.message });
+        }
+      }
+      if (method === "DELETE") {
+        try {
+          return json(res, 200, { ok: true, workspace: tree.removeWorkspace(url.searchParams.get("id")) });
+        } catch (error) {
+          return json(res, 400, { ok: false, error: error.message });
+        }
       }
     }
 

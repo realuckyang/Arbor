@@ -276,7 +276,7 @@ export function TabBar({
         <button
           onClick={onToggleSideGroup}
           className={[
-            "ml-auto px-2 flex items-center justify-center border-l border-border shrink-0",
+            "ml-auto hidden px-2 items-center justify-center border-l border-border shrink-0 lg:flex",
             sideToggleOpen ? "text-accent bg-accent-soft hover:text-accent" : "text-text-faint hover:text-text hover:bg-bg-hover",
           ].join(" ")}
           title={sideToggleOpen ? "收起右侧区域" : "开启右侧区域"}

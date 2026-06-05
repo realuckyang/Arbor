@@ -1,14 +1,15 @@
 // @ts-nocheck
-// 全局内容搜索:在 workspaces/ 里 grep 真实文件内容,返回按文件分组的命中行。
+// 全局内容搜索:在所有工作区里 grep 真实文件内容,返回按文件分组的命中行。
 import fs from "fs";
 import path from "path";
-import { ensureRoot, IGNORE_DIRS } from "./tree.js";
+import { ensureRoot, IGNORE_DIRS, listWorkspaces } from "./tree.js";
 
 const isHidden = (name) => name.startsWith(".");
 const isConvFile = (name) => name.endsWith(".conv.json");
 
 const searchContent = (query, { maxMatchesPerFile = 50, maxTotal = 1000, maxFileSize = 1_000_000 } = {}) => {
-  const root = ensureRoot();
+  const roots = listWorkspaces().map((w) => w.path);
+  if (!roots.length) roots.push(ensureRoot());
   const q = String(query || "");
   if (!q) return [];
   const ql = q.toLowerCase();
@@ -48,7 +49,7 @@ const searchContent = (query, { maxMatchesPerFile = 50, maxTotal = 1000, maxFile
     }
   };
 
-  walk(root);
+  for (const root of roots) walk(root);
   return results;
 };
 

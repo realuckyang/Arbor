@@ -15,6 +15,7 @@ export type Space = {
   size?: number;                                                 // 仅 file:字节数
   binary?: boolean;                                              // 仅 file:二进制,无法当文本预览
   tooLarge?: boolean;                                            // 仅 file:超过文本预览上限
+  workspace?: boolean;                                           // space 且 parent_id=null 时表示工作区 root
 };
 
 export type SearchMatch = { line: number; text: string };
@@ -65,6 +66,15 @@ export type ManagedProcess = {
   output: string;
 };
 
+export type WorkspaceRoot = {
+  id: string;
+  title: string;
+  path: string;
+  enabled: number;
+  created_at: string;
+  last_opened_at: string | null;
+};
+
 const request = async <T>(path: string, opts: RequestInit = {}) => {
   const res = await fetch(path, opts);
   const data = await res.json().catch(() => ({}));
@@ -104,6 +114,12 @@ export const api = {
     request<{ ok: boolean }>(`/api/tree?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
   ancestry: (id: string) =>
     request<{ ancestry: Space[] }>(`/api/ancestry?id=${encodeURIComponent(id)}`),
+
+  listWorkspaces: () => request<{ workspaces: WorkspaceRoot[] }>("/api/workspaces"),
+  addWorkspace: (opts: { path: string; title?: string }) =>
+    request<{ item: Space }>("/api/workspaces", { method: "POST", ...jsonBody(opts) }).then(one),
+  removeWorkspace: (id: string) =>
+    request<{ ok: boolean; workspace: WorkspaceRoot | null }>(`/api/workspaces?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   listMessages: (conversationId: string) =>
     request<{ messages: Message[] }>(`/api/messages?conversationId=${encodeURIComponent(conversationId)}`),

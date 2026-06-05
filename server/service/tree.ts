@@ -52,6 +52,20 @@ const remove = (id) => {
   emit({ type: "tree_changed", id, reason: "deleted" });
 };
 
+const listWorkspaces = () => repo.listWorkspaces();
+
+const addWorkspace = (body = {}) => {
+  const item = repo.addWorkspace(body);
+  emit({ type: "tree_changed", item, reason: "workspace_added" });
+  return item;
+};
+
+const removeWorkspace = (id) => {
+  const workspace = repo.removeWorkspace(id);
+  emit({ type: "tree_changed", id, reason: "workspace_removed" });
+  return workspace;
+};
+
 const markRead = (id) => {
   repo.markRead(id);
   return getItem(id);
@@ -61,4 +75,4 @@ const ancestry = (id) => repo.ancestry(id);
 const search = (q) => (q ? searchContent(q) : []);
 const fileRawAbs = (id) => repo.resolveFileAbs(id);
 
-export { enrich, listChildren, listAll, getItem, create, update, remove, markRead, ancestry, search, fileRawAbs };
+export { enrich, listChildren, listAll, getItem, create, update, remove, markRead, ancestry, search, fileRawAbs, listWorkspaces, addWorkspace, removeWorkspace };

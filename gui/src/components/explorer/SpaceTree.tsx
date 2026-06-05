@@ -3,7 +3,7 @@ import type { Space } from "../../api";
 import { api } from "../../api";
 import { SpaceRow, InlineCreateRow, iconFor, colorFor, type TreeControls, type DropPosition } from "./SpaceRow";
 import { ContextMenu, type MenuItem } from "../ui";
-import { Settings, Folder, FileText, Bot, Trash2, Pencil, Plus, X, Copy, PanelRight } from "lucide-react";
+import { Settings, Folder, FolderPlus, FileText, Bot, Trash2, Pencil, Plus, X, Copy, PanelRight } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
@@ -24,6 +24,7 @@ export function SpaceTree({
   selectedId,
   onSelect,
   onOpenSide,
+  createParentId,
   refreshKey,
   showSettings,
   onToggleSettings,
@@ -34,6 +35,7 @@ export function SpaceTree({
   selectedId: string;
   onSelect: (n: Space | null) => void;
   onOpenSide?: (n: Space) => void;
+  createParentId?: string | null;
   refreshKey: number;
   showSettings: boolean;
   onToggleSettings: () => void;
@@ -42,6 +44,15 @@ export function SpaceTree({
   onChanged?: () => void;
 }) {
   const [roots, setRoots] = useState<Space[]>([]);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = Number(localStorage.getItem("arbor.sidebarWidth") || "");
+    return Number.isFinite(saved) && saved >= 220 && saved <= 420 ? saved : 260;
+  });
+  const [addWorkspaceOpen, setAddWorkspaceOpen] = useState(false);
+  const [workspacePathDraft, setWorkspacePathDraft] = useState("");
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [addingWorkspace, setAddingWorkspace] = useState(false);
+  const autoExpandedWorkspaces = useRef<Set<string>>(new Set());
 
   // 展开集
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -72,12 +83,16 @@ export function SpaceTree({
   const pointerRef = useRef({ x: 0, y: 0 });
   useEffect(() => {
     const onMove = (e: PointerEvent) => { pointerRef.current = { x: e.clientX, y: e.clientY }; };
-    document.addEventListener("pointermove", onMove);
-    document.addEventListener("touchmove", (e: TouchEvent) => {
+    const onTouchMove = (e: TouchEvent) => {
       const t = e.touches[0];
       if (t) pointerRef.current = { x: t.clientX, y: t.clientY };
-    }, { passive: true });
-    return () => document.removeEventListener("pointermove", onMove);
+    };
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("touchmove", onTouchMove, { passive: true });
+    return () => {
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("touchmove", onTouchMove);
+    };
   }, []);
 
   const load = useCallback(async () => {
@@ -89,6 +104,42 @@ export function SpaceTree({
   const refresh = useCallback(() => { load(); onChanged?.(); }, [load, onChanged]);
 
   useEffect(() => { load(); }, [load, refreshKey]);
+  useEffect(() => {
+    const nextIds = roots.filter((root) => root.workspace && !autoExpandedWorkspaces.current.has(root.id)).map((root) => root.id);
+    if (!nextIds.length) return;
+    nextIds.forEach((id) => autoExpandedWorkspaces.current.add(id));
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      nextIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }, [roots]);
+
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+    const previousCursor = document.body.style.cursor;
+    const previousSelect = document.body.style.userSelect;
+    let currentWidth = startWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    const onMove = (ev: PointerEvent) => {
+      const next = Math.max(220, Math.min(420, startWidth + ev.clientX - startX));
+      currentWidth = next;
+      setSidebarWidth(next);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousSelect;
+      localStorage.setItem("arbor.sidebarWidth", String(Math.round(currentWidth)));
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
 
   // ── sensors:鼠标 + 触摸 + 键盘 ──
   const sensors = useSensors(
@@ -104,6 +155,7 @@ export function SpaceTree({
     setDraftTitle("");
     if (parentId) setExpanded(parentId, true);
   };
+  const currentCreateParentId = () => createParentId || roots[0]?.id || null;
   const commitCreate = async () => {
     const title = draftTitle.trim();
     if (creatingUnder === null) return;
@@ -116,6 +168,36 @@ export function SpaceTree({
     refresh();
   };
   const cancelCreate = () => { setCreatingUnder(null); setDraftTitle(""); };
+
+  const openAddWorkspace = () => {
+    setWorkspacePathDraft("");
+    setWorkspaceError(null);
+    setAddWorkspaceOpen(true);
+  };
+  useEffect(() => {
+    const open = () => openAddWorkspace();
+    window.addEventListener("arbor:add-workspace", open);
+    return () => window.removeEventListener("arbor:add-workspace", open);
+  }, []);
+
+  const addWorkspace = async () => {
+    const workspacePath = workspacePathDraft.trim();
+    if (!workspacePath) return;
+    setAddingWorkspace(true);
+    setWorkspaceError(null);
+    try {
+      const result = await api.addWorkspace({ path: workspacePath });
+      setExpanded(result.space.id, true);
+      handleSelect(result.space);
+      setAddWorkspaceOpen(false);
+      setWorkspacePathDraft("");
+      refresh();
+    } catch (e: any) {
+      setWorkspaceError(e.message || "添加工作区失败");
+    } finally {
+      setAddingWorkspace(false);
+    }
+  };
 
   // ── 重命名 ──
   const startRename = (n: Space) => { setRenamingId(n.id); setRenameDraft(n.title); };
@@ -138,6 +220,7 @@ export function SpaceTree({
 
   const applyDrop = async (sourceId: string, target: Space, position: DropPosition) => {
     if (sourceId === target.id) return;
+    if (target.workspace && position !== "into") return;
     try {
       if (position === "into") {
         if (target.kind !== "space") return;
@@ -170,13 +253,7 @@ export function SpaceTree({
   };
 
   const applyDropToRoot = async (sourceId: string) => {
-    try {
-      const pos = await nextPosUnder(null);
-      await api.moveSpace(sourceId, null, pos);
-      refresh();
-    } catch (e: any) {
-      alert(e.message || "move failed");
-    }
+    if (sourceId) setOverRoot(false);
   };
 
   // ── dnd-kit 事件 ──
@@ -277,10 +354,15 @@ export function SpaceTree({
         },
       },
       "divider",
-      { label: "删除", icon: <Trash2 size={13} />, danger: true,
+      { label: space.workspace ? "移除工作区" : "删除", icon: <Trash2 size={13} />, danger: true,
         onClick: async () => {
-          if (!confirm(`删除「${space.title}」?${space.kind === "space" ? "\n里面所有内容也会一起删除。" : ""}`)) return;
-          await api.deleteSpace(space.id);
+          if (space.workspace) {
+            if (!confirm(`从 Arbor 移除工作区「${space.title}」?\n不会删除磁盘文件。`)) return;
+            await api.removeWorkspace(space.id);
+          } else {
+            if (!confirm(`删除「${space.title}」?${space.kind === "space" ? "\n里面所有内容也会一起删除。" : ""}`)) return;
+            await api.deleteSpace(space.id);
+          }
           if (selectedId === space.id) onSelect(null);
           refresh();
         },
@@ -294,20 +376,14 @@ export function SpaceTree({
     setMenu({
       x: e.clientX, y: e.clientY,
       items: [
-        { label: "新建对话", icon: <Bot size={13} className="text-warning" />,
-          onClick: () => startCreate(null, "conversation") },
-        "divider",
-        { label: "新建文件夹", icon: <Folder size={13} className="text-accent" />,
-          onClick: () => startCreate(null, "space") },
-        { label: "新建文件", icon: <FileText size={13} className="text-text-faint" />,
-          onClick: () => startCreate(null, "file") },
+        { label: "添加工作区", icon: <FolderPlus size={13} className="text-accent" />, onClick: openAddWorkspace },
       ],
     });
   };
 
   const handleSelect = (n: Space | null) => {
     onSelect(n);
-    if (mobileOpen) onCloseMobile?.();
+    if (mobileOpen && n?.kind !== "space") onCloseMobile?.();
   };
   const handleToggleSettings = () => {
     onToggleSettings();
@@ -315,7 +391,7 @@ export function SpaceTree({
   };
 
   // 「新建」下拉:对话 / 空间 / 文件(锚在按钮下方,复用 ContextMenu)
-  const openNewMenu = (e: React.MouseEvent, parentId: string | null = null) => {
+  const openNewMenu = (e: React.MouseEvent, parentId: string | null = currentCreateParentId()) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setMenu({
       x: r.left, y: r.bottom + 4,
@@ -324,6 +400,8 @@ export function SpaceTree({
         "divider",
         { label: "新建文件夹", icon: <Folder size={13} className="text-accent" />, onClick: () => startCreate(parentId, "space") },
         { label: "新建文件", icon: <FileText size={13} className="text-text-faint" />, onClick: () => startCreate(parentId, "file") },
+        "divider",
+        { label: "添加工作区", icon: <FolderPlus size={13} className="text-accent" />, onClick: openAddWorkspace },
       ],
     });
   };
@@ -344,10 +422,11 @@ export function SpaceTree({
       onDragCancel={handleDragCancel}
     >
       <aside
+        style={{ width: `min(${sidebarWidth}px, calc(100vw - 32px))` }}
         className={[
-          "flex-col border-r border-border bg-bg-raised shrink-0",
-          "fixed inset-y-0 left-0 z-40 w-[280px] shadow-2xl shadow-black/10",
-          "md:relative md:w-[260px] md:shadow-none md:flex",
+          "relative flex-col border-r border-border bg-bg-raised shrink-0",
+          "fixed inset-y-0 left-0 z-40 shadow-2xl shadow-black/10",
+          "md:relative md:shadow-none md:flex",
           // 移动端:关闭时直接 hidden(可靠,不依赖 translate);桌面端始终显示
           mobileOpen ? "flex" : "hidden md:flex",
         ].join(" ")}
@@ -418,6 +497,21 @@ export function SpaceTree({
         </div>
 
         {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
+        {addWorkspaceOpen && (
+          <AddWorkspaceDialog
+            value={workspacePathDraft}
+            error={workspaceError}
+            submitting={addingWorkspace}
+            onChange={(value) => { setWorkspacePathDraft(value); setWorkspaceError(null); }}
+            onSubmit={addWorkspace}
+            onClose={() => { if (!addingWorkspace) setAddWorkspaceOpen(false); }}
+          />
+        )}
+        <div
+          onPointerDown={startResize}
+          className="hidden md:block absolute top-0 right-[-3px] z-20 h-full w-1.5 cursor-col-resize hover:bg-accent/25"
+          title="调整侧边栏宽度"
+        />
       </aside>
 
       {/* 拖动时跟手指/鼠标的预览 */}
@@ -456,6 +550,78 @@ function DragPreview({ space }: { space: Space }) {
     <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-white border border-accent shadow-lg shadow-black/15 text-[14.5px] cursor-grabbing select-none">
       <Icon size={14} className={color} />
       <span className="truncate max-w-48">{space.title}</span>
+    </div>
+  );
+}
+
+function AddWorkspaceDialog({
+  value,
+  error,
+  submitting,
+  onChange,
+  onSubmit,
+  onClose,
+}: {
+  value: string;
+  error: string | null;
+  submitting: boolean;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  onClose: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/20 px-4 pt-24" onClick={onClose}>
+      <form
+        className="w-full max-w-lg rounded-lg border border-border bg-bg shadow-2xl shadow-black/20"
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => { e.preventDefault(); onSubmit(); }}
+      >
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="flex items-center gap-2 text-[14px] font-medium text-text">
+            <FolderPlus size={15} className="text-accent" />
+            <span>添加工作区</span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-6 w-6 items-center justify-center rounded text-text-faint hover:bg-bg-hover hover:text-text"
+            title="关闭"
+          >
+            <X size={14} />
+          </button>
+        </div>
+        <div className="space-y-3 px-4 py-4">
+          <label className="block text-[12px] font-medium text-text-dim">文件夹路径</label>
+          <input
+            ref={inputRef}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="/Users/me/projects/my-app"
+            className="w-full rounded-md border border-border bg-bg px-3 py-2 text-[13px] text-text outline-none focus:border-accent"
+          />
+          {error && <div className="text-[12px] text-danger">{error}</div>}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="rounded px-3 py-1.5 text-[13px] text-text-dim hover:bg-bg-hover disabled:opacity-50"
+          >
+            取消
+          </button>
+          <button
+            type="submit"
+            disabled={submitting || !value.trim()}
+            className="rounded bg-accent px-3 py-1.5 text-[13px] text-white hover:opacity-90 disabled:opacity-50"
+          >
+            添加
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

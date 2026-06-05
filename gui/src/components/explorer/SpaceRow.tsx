@@ -70,13 +70,14 @@ export function SpaceRow({
   const expanded = controls.expandedIds.has(space.id);
   const isRenaming = controls.renamingId === space.id;
   const isDragging = controls.activeId === space.id;
+  const dragDisabled = isRenaming || !!space.workspace;
 
   // dnd-kit
   const {
     attributes,
     listeners,
     setNodeRef: setDragRef,
-  } = useDraggable({ id: space.id, data: { space }, disabled: isRenaming });
+  } = useDraggable({ id: space.id, data: { space }, disabled: dragDisabled });
   const { setNodeRef: setDropRef } = useDroppable({ id: space.id, data: { space } });
   const setRef = useCallback(
     (el: HTMLDivElement | null) => { setDragRef(el); setDropRef(el); },
@@ -121,13 +122,14 @@ export function SpaceRow({
 
       <div
         ref={setRef}
-        {...attributes}
-        {...listeners}
+        {...(dragDisabled ? {} : attributes)}
+        {...(dragDisabled ? {} : listeners)}
+        role={dragDisabled ? "button" : undefined}
+        tabIndex={dragDisabled ? 0 : undefined}
         onClick={() => {
           if (isRenaming) return;
-          // 点空间整行 = 展开/收起;点对话/文件 = 打开
+          onSelect(space);
           if (isContainer) controls.toggleExpand(space.id);
-          else onSelect(space);
         }}
         onContextMenu={(e) => onContextMenu(e, space)}
         className={[

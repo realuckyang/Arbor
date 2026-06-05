@@ -51,6 +51,15 @@ const initDb = () => {
       value TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS workspaces (
+      id             TEXT PRIMARY KEY,
+      title          TEXT NOT NULL,
+      path           TEXT NOT NULL UNIQUE,
+      enabled        INTEGER NOT NULL DEFAULT 1,
+      created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+      last_opened_at TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, id);
     CREATE INDEX IF NOT EXISTS idx_calls_caller  ON calls(caller_id, status);
     CREATE INDEX IF NOT EXISTS idx_calls_callee  ON calls(callee_id, status);

@@ -5,7 +5,7 @@ import { QuickOpen, CommandPalette, SearchPanel, type Command } from "./componen
 import { SpaceTree } from "./components/explorer";
 import { SettingsPanel } from "./components/settings";
 import { WorkspaceLayout, isSpaceTab, useTabGroups } from "./components/workspace";
-import { FileText, Folder, Bot, Search, Settings as SettingsIcon, X, MonitorPlay, PanelRight } from "lucide-react";
+import { FileText, Folder, FolderPlus, Bot, Search, Settings as SettingsIcon, X, MonitorPlay, PanelRight } from "lucide-react";
 import type { ManagedProcess } from "./api";
 
 export function App() {
@@ -20,6 +20,7 @@ export function App() {
   const [fileRefreshKeys, setFileRefreshKeys] = useState<Record<string, number>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
+  const [selectedNode, setSelectedNode] = useState<Space | null>(null);
 
   const onFileSaved = (id: string) => {
     setDirtyIds((s) => { const n = new Set(s); n.delete(id); return n; });
@@ -46,7 +47,13 @@ export function App() {
   const activeSpace = tabGroups.activeSpace;
   const openNode = (n: Space | null, opts: { preview?: boolean; side?: boolean; groupId?: "main" | "side" } = {}) => {
     setShowSettings(false);
+    setSelectedNode(n);
     tabGroups.openNode(n, opts);
+  };
+  const currentCreateParentId = () => {
+    const node = selectedNode || activeSpace;
+    if (!node) return null;
+    return node.kind === "space" ? node.id : node.parent_id;
   };
 
   // 树相关 WS 事件 → 刷新树/状态点(节流,流式时 message 事件很密)
@@ -140,17 +147,23 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // 在根目录新建(命令面板用,名字走 prompt)
-  const createAtRoot = async (kind: Space["kind"]) => {
+  // 在当前选中工作区/文件夹里新建(命令面板用,名字走 prompt)
+  const createAtCurrentTarget = async (kind: Space["kind"]) => {
     const title = window.prompt(`新建${kind === "space" ? "文件夹" : kind === "conversation" ? "对话" : "文件"}的名字:`);
     if (!title || !title.trim()) return;
     try {
-      const r = await api.createSpace({ kind, title: title.trim() });
+      const parentId = currentCreateParentId() || undefined;
+      const r = await api.createSpace({ kind, title: title.trim(), parentId });
       openNode(r.space);
       setTreeRefresh((n) => n + 1);
     } catch (e: any) {
       alert(e.message || "新建失败");
     }
+  };
+
+  const addWorkspace = async () => {
+    setMobileNavOpen(true);
+    window.dispatchEvent(new Event("arbor:add-workspace"));
   };
 
   // 搜索命中:打开文件并跳转到行
@@ -160,9 +173,10 @@ export function App() {
   };
 
   const commands: Command[] = [
-    { id: "new-conversation", label: "新建对话", icon: <Bot size={14} />, run: () => createAtRoot("conversation") },
-    { id: "new-space", label: "新建文件夹", icon: <Folder size={14} />, run: () => createAtRoot("space") },
-    { id: "new-file", label: "新建文件", icon: <FileText size={14} />, run: () => createAtRoot("file") },
+    { id: "new-conversation", label: "新建对话", icon: <Bot size={14} />, run: () => createAtCurrentTarget("conversation") },
+    { id: "new-space", label: "新建文件夹", icon: <Folder size={14} />, run: () => createAtCurrentTarget("space") },
+    { id: "new-file", label: "新建文件", icon: <FileText size={14} />, run: () => createAtCurrentTarget("file") },
+    { id: "add-workspace", label: "添加工作区", icon: <FolderPlus size={14} />, run: addWorkspace },
     { id: "quick-open", label: "快速打开…", hint: "⌘P", icon: <Search size={14} />, run: () => setQuickOpen(true) },
     { id: "search", label: "在所有文件中搜索…", hint: "⌘⇧F", icon: <Search size={14} />, run: () => setSearchOpen(true) },
     { id: "preview", label: "打开预览", icon: <MonitorPlay size={14} />, run: () => tabGroups.openProcess({ groupId: "side" }) },
@@ -194,9 +208,10 @@ export function App() {
   return (
     <div className="h-screen flex overflow-hidden bg-bg text-text font-sans relative">
       <SpaceTree
-        selectedId={activeSpace?.id || ""}
+        selectedId={selectedNode?.id || activeSpace?.id || ""}
         onSelect={openNode}
         onOpenSide={(n) => openNode(n, { groupId: "side" })}
+        createParentId={currentCreateParentId()}
         refreshKey={treeRefresh}
         showSettings={showSettings}
         onToggleSettings={() => setShowSettings((v) => !v)}

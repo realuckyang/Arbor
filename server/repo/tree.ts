@@ -9,7 +9,7 @@
 //   conversation  = 文件名里的 uuid(稳定)—— messages / calls / call_agent 都按它寻址
 // SQLite 只存运行时状态(messages / calls / settings)。
 
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -23,8 +23,51 @@ const SEP = path.sep;
 const ensureRoot = () => { fs.mkdirSync(ROOT, { recursive: true }); return ROOT; };
 
 const isPathId = (id) => typeof id === "string" && id.startsWith("/");
-const underRoot = (abs) => abs === ROOT || abs.startsWith(ROOT.endsWith(SEP) ? ROOT : ROOT + SEP);
-const parentAbsOf = (abs) => { const d = path.dirname(abs); return d === ROOT ? null : d; };
+const normalizeAbs = (p) => path.resolve(String(p || "").trim());
+const withSep = (abs) => abs.endsWith(SEP) ? abs : abs + SEP;
+const isUnder = (abs, root) => abs === root || abs.startsWith(withSep(root));
+const workspaceIdForPath = (abs) => createHash("sha1").update(abs).digest("hex").slice(0, 16);
+let defaultWorkspaceReady = false;
+const ensureDefaultWorkspace = () => {
+  ensureRoot();
+  if (defaultWorkspaceReady) return;
+  const db = getDb();
+  db.prepare(`
+    INSERT OR IGNORE INTO workspaces (id, title, path, enabled)
+    VALUES (?, ?, ?, 1)
+  `).run(workspaceIdForPath(ROOT), "workspace", ROOT);
+  db.prepare(`
+    UPDATE workspaces SET title = 'workspace'
+    WHERE path = ? AND title = 'Arbor'
+  `).run(ROOT);
+  defaultWorkspaceReady = true;
+};
+const workspaceRows = () => {
+  ensureDefaultWorkspace();
+  const rows = getDb().prepare(`
+    SELECT id, title, path, enabled, created_at, last_opened_at
+    FROM workspaces
+    WHERE enabled = 1
+    ORDER BY created_at, id
+  `).all();
+  return rows
+    .map((r) => ({ ...r, path: normalizeAbs(r.path) }))
+    .filter((r) => {
+      try { return fs.statSync(r.path).isDirectory(); }
+      catch { return false; }
+    });
+};
+const workspacePaths = () => workspaceRows().map((r) => r.path);
+const rootOf = (abs) => {
+  const full = normalizeAbs(abs);
+  return workspacePaths()
+    .filter((root) => isUnder(full, root))
+    .sort((a, b) => b.length - a.length)[0] || null;
+};
+const isAllowedPath = (abs) => !!rootOf(abs);
+const isWorkspaceRoot = (abs) => rootOf(abs) === normalizeAbs(abs);
+const workspaceForPath = (abs) => workspaceRows().find((r) => r.path === normalizeAbs(abs)) || null;
+const parentAbsOf = (abs) => isWorkspaceRoot(abs) ? null : path.dirname(normalizeAbs(abs));
 const isHidden = (name) => name.startsWith(".");
 // 递归(对话索引 / 删除子树)时跳过的重目录 —— 跟 VSCode 一样不索引它们,
 // 否则 AI 一 npm install,node_modules 几万文件会拖垮一切。
@@ -48,7 +91,7 @@ let _idx = null, _idxAt = 0;
 const invalidateIdx = () => { _idx = null; };
 const buildIdx = () => {
   const map = {};
-  const stack = [ensureRoot()];
+  const stack = workspacePaths();
   while (stack.length) {
     const dir = stack.pop();
     let entries; try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
@@ -72,10 +115,15 @@ const findConvFile = (uuid) => {
 const readConvMeta = (abs) => { try { return JSON.parse(fs.readFileSync(abs, "utf8")) || {}; } catch { return {}; } };
 
 // ── 构造统一 item ──
-const spaceItem = (abs) => ({
-  id: abs, parent_id: parentAbsOf(abs), kind: "space",
-  title: path.basename(abs), system: null, content: null, position: null, last_read_at: null, created_at: null,
-});
+const spaceItem = (abs) => {
+  const full = normalizeAbs(abs);
+  const ws = isWorkspaceRoot(full) ? workspaceForPath(full) : null;
+  return {
+    id: full, parent_id: parentAbsOf(full), kind: "space",
+    title: ws?.title || path.basename(full), system: null, content: null, position: null, last_read_at: null, created_at: null,
+    workspace: !!ws,
+  };
+};
 const convItem = (abs) => {
   const m = readConvMeta(abs);
   return {
@@ -121,7 +169,10 @@ const listAll = () => {
       else out.push(fileItem(abs));
     }
   };
-  walk(ensureRoot());
+  for (const root of workspacePaths()) {
+    out.push(spaceItem(root));
+    walk(root);
+  }
   return out;
 };
 
@@ -130,9 +181,10 @@ const locate = (id) => {
   if (id == null || id === "") return null;
   const sid = String(id);
   if (isPathId(sid)) {
-    if (!underRoot(sid)) return null;
-    let st; try { st = fs.statSync(sid); } catch { return null; }
-    return { kind: st.isDirectory() ? "space" : "file", abs: sid };
+    const abs = normalizeAbs(sid);
+    if (!isAllowedPath(abs)) return null;
+    let st; try { st = fs.statSync(abs); } catch { return null; }
+    return { kind: st.isDirectory() ? "space" : "file", abs };
   }
   const abs = findConvFile(sid);
   return abs ? { kind: "conversation", abs } : null;
@@ -141,7 +193,7 @@ const locate = (id) => {
 // 取某 id 对应的「目录」:space=自身;conversation/file=其所在目录
 const dirOf = (id) => {
   const hit = locate(id);
-  if (!hit) return ensureRoot();
+  if (!hit) return workspacePaths()[0] || ensureRoot();
   return hit.kind === "space" ? hit.abs : path.dirname(hit.abs);
 };
 const conversationDir = (id) => dirOf(id); // agent 的 shell 工作目录
@@ -150,7 +202,11 @@ const conversationDir = (id) => dirOf(id); // agent 的 shell 工作目录
 
 const listChildren = (parentId) => {
   let dirAbs;
-  if (!parentId) dirAbs = ensureRoot();
+  if (!parentId) {
+    const out = workspaceRows().map((row) => spaceItem(row.path));
+    out.forEach((n, i) => { n.position = i + 1; });
+    return out;
+  }
   else {
     const hit = locate(parentId);
     if (!hit || hit.kind !== "space") return [];
@@ -186,7 +242,7 @@ const createItem = ({ kind, parentId = null, title, system = null, content = nul
     const hit = locate(parentId);
     if (!hit || hit.kind !== "space") throw new Error(`父级必须是文件夹: ${parentId}`);
     parentDir = hit.abs;
-  } else parentDir = ensureRoot();
+  } else parentDir = workspacePaths()[0] || ensureRoot();
 
   if (kind === "conversation") {
     const id = randomUUID();
@@ -209,6 +265,13 @@ const createItem = ({ kind, parentId = null, title, system = null, content = nul
 const updateItem = (id, { title, system, content } = {}) => {
   const hit = locate(id);
   if (!hit) throw new Error(`not found: ${id}`);
+
+  if (hit.kind === "space" && isWorkspaceRoot(hit.abs)) {
+    if (title !== undefined) {
+      getDb().prepare("UPDATE workspaces SET title = ? WHERE path = ?").run(String(title || "").trim() || path.basename(hit.abs), hit.abs);
+    }
+    return spaceItem(hit.abs);
+  }
 
   if (hit.kind === "conversation") {
     const m = readConvMeta(hit.abs);
@@ -252,6 +315,7 @@ const deleteItem = (id) => {
     return;
   }
   if (hit.kind === "file") { fs.rmSync(hit.abs, { force: true }); return; }
+  if (isWorkspaceRoot(hit.abs)) throw new Error("工作区根不能删除,请从 Arbor 移除工作区");
   // space:先清掉子树里所有对话的 SQLite 残留,再整目录删
   const stack = [hit.abs];
   while (stack.length) {
@@ -270,16 +334,16 @@ const deleteItem = (id) => {
 const moveItem = (id, newParentId, _position = undefined) => {
   const hit = locate(id);
   if (!hit) throw new Error(`not found: ${id}`);
+  if (hit.kind === "space" && isWorkspaceRoot(hit.abs)) throw new Error("工作区根不能移动");
   let targetDir;
   if (newParentId) {
     const ph = locate(newParentId);
     if (!ph || ph.kind !== "space") throw new Error("目标必须是一个文件夹");
     targetDir = ph.abs;
-  } else targetDir = ensureRoot();
+  } else targetDir = workspacePaths()[0] || ensureRoot();
 
   if (hit.kind === "space") {
-    const withSep = hit.abs.endsWith(SEP) ? hit.abs : hit.abs + SEP;
-    if (targetDir === hit.abs || targetDir.startsWith(withSep)) throw new Error("不能把文件夹移进自己的子孙");
+    if (targetDir === hit.abs || targetDir.startsWith(withSep(hit.abs))) throw new Error("不能把文件夹移进自己的子孙");
   }
   const next = path.join(targetDir, path.basename(hit.abs));
   if (next !== hit.abs) fs.renameSync(hit.abs, next);
@@ -334,8 +398,41 @@ const getConversation = (id) => { const it = getItem(id); return it && it.kind =
 const createConversation = ({ spaceId = null, title, system = null } = {}) =>
   createItem({ kind: "conversation", parentId: spaceId, title, system });
 
+const addWorkspace = ({ path: rawPath, title } = {}) => {
+  if (!String(rawPath || "").trim()) throw new Error("path is required");
+  const abs = normalizeAbs(rawPath);
+  let st; try { st = fs.statSync(abs); } catch { throw new Error(`目录不存在: ${abs}`); }
+  if (!st.isDirectory()) throw new Error(`不是文件夹: ${abs}`);
+  const name = String(title || "").trim() || path.basename(abs) || abs;
+  const id = workspaceIdForPath(abs);
+  getDb().prepare(`
+    INSERT INTO workspaces (id, title, path, enabled, last_opened_at)
+    VALUES (?, ?, ?, 1, datetime('now'))
+    ON CONFLICT(path) DO UPDATE SET
+      title = excluded.title,
+      enabled = 1,
+      last_opened_at = datetime('now')
+  `).run(id, name, abs);
+  invalidateIdx();
+  return spaceItem(abs);
+};
+
+const removeWorkspace = (idOrPath) => {
+  const key = String(idOrPath || "");
+  const rows = workspaceRows();
+  const row = rows.find((r) => r.id === key || r.path === normalizeAbs(key));
+  if (!row) return null;
+  if (rows.length <= 1) throw new Error("至少保留一个工作区");
+  getDb().prepare("UPDATE workspaces SET enabled = 0 WHERE id = ?").run(row.id);
+  invalidateIdx();
+  return row;
+};
+
+const listWorkspaces = () => workspaceRows();
+
 export {
   ROOT, ensureRoot, IGNORE_DIRS,
   listChildren, listAll, getItem, createItem, updateItem, deleteItem, moveItem, ancestry,
   markRead, unreadMap, conversationDir, getConversation, createConversation, resolveFileAbs,
+  listWorkspaces, addWorkspace, removeWorkspace, isWorkspaceRoot,
 };
