@@ -2,6 +2,7 @@ import type { Space } from "../../api";
 
 export const PROCESS_TAB_ID = "__process_preview__";
 export const TERMINAL_TAB_PREFIX = "__terminal__";
+export const GIT_TAB_PREFIX = "__git__";
 export const GIT_DIFF_TAB_PREFIX = "__git_diff__";
 export const SETTINGS_TAB_ID = "__settings__";
 
@@ -28,13 +29,20 @@ export type GitDiffTab = {
   staged?: boolean;
 };
 
+export type GitTab = {
+  id: string;
+  kind: "git";
+  title: string;
+  root: string;
+};
+
 export type SettingsTab = {
   id: typeof SETTINGS_TAB_ID;
   kind: "settings";
   title: "设置";
 };
 
-export type WorkspaceTab = Space | ProcessTab | TerminalTab | GitDiffTab | SettingsTab;
+export type WorkspaceTab = Space | ProcessTab | TerminalTab | GitTab | GitDiffTab | SettingsTab;
 export type WorkspaceGroupId = "main" | "side";
 
 export type WorkspaceGroupState = {
@@ -58,6 +66,13 @@ export const terminalTab = (cwd: string, title = "Terminal", initialCommand?: st
   initialCommand,
 });
 
+export const gitTab = (root: string, title = "Git"): GitTab => ({
+  id: `${GIT_TAB_PREFIX}:${root}`,
+  kind: "git",
+  title,
+  root,
+});
+
 export const gitDiffTab = (root: string, filePath: string, staged = false): GitDiffTab => ({
   id: `${GIT_DIFF_TAB_PREFIX}:${root}:${filePath}:${staged ? "staged" : "worktree"}`,
   kind: "git-diff",
@@ -79,6 +94,9 @@ export const isProcessTab = (tab: WorkspaceTab | null | undefined): tab is Proce
 export const isTerminalTab = (tab: WorkspaceTab | null | undefined): tab is TerminalTab =>
   tab?.kind === "terminal";
 
+export const isGitTab = (tab: WorkspaceTab | null | undefined): tab is GitTab =>
+  tab?.kind === "git";
+
 export const isGitDiffTab = (tab: WorkspaceTab | null | undefined): tab is GitDiffTab =>
   tab?.kind === "git-diff";
 
@@ -86,7 +104,7 @@ export const isSettingsTab = (tab: WorkspaceTab | null | undefined): tab is Sett
   tab?.kind === "settings";
 
 export const isSpaceTab = (tab: WorkspaceTab | null | undefined): tab is Space =>
-  !!tab && tab.kind !== "process" && tab.kind !== "terminal" && tab.kind !== "git-diff" && tab.kind !== "settings";
+  !!tab && tab.kind !== "process" && tab.kind !== "terminal" && tab.kind !== "git" && tab.kind !== "git-diff" && tab.kind !== "settings";
 
 export const isOpenableSpace = (space: Space | null | undefined): space is Space =>
   !!space && space.kind !== "space";

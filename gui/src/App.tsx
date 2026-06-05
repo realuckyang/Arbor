@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSocket } from "./ws";
-import { api, type Settings as AppSettings, type Space } from "./api";
-import type { ActivityId } from "./components/activity";
+import { api, type GitRepositoryStatus, type Space } from "./api";
 import { QuickOpen, CommandPalette, type Command } from "./components/command";
 import { SpaceTree } from "./components/explorer";
 import { WorkspaceLayout, isSettingsTab, isSpaceTab, useTabGroups } from "./components/workspace";
@@ -14,8 +13,6 @@ export function App() {
   const [gitRefreshKey, setGitRefreshKey] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [desktopNavOpen, setDesktopNavOpen] = useState(true);
-  const [showActivityBar, setShowActivityBar] = useState(false);
-  const [activeActivity, setActiveActivity] = useState<ActivityId>("explorer");
   const [quickOpen, setQuickOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [pendingGoto, setPendingGoto] = useState<{ id: string; line: number } | null>(null);
@@ -65,25 +62,10 @@ export function App() {
   };
   const openSettings = () => tabGroups.openSettings();
 
-  useEffect(() => {
-    let cancelled = false;
-    api.getSettings()
-      .then((r) => { if (!cancelled) setShowActivityBar(!!r.settings.showActivityBar); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-
-  const onSettingsSaved = (settings: AppSettings) => {
-    setShowActivityBar(!!settings.showActivityBar);
-  };
   const refreshGit = useCallback(() => setGitRefreshKey((n) => n + 1), []);
-  const openActivity = (id: ActivityId) => {
-    setActiveActivity(id);
-    if (window.matchMedia("(min-width: 768px)").matches) {
-      setDesktopNavOpen(true);
-      return;
-    }
-    setMobileNavOpen(true);
+  const openGit = (repo: GitRepositoryStatus) => {
+    if (!repo.root) return;
+    tabGroups.openGit(repo.root, repo.workspaceTitle || "Git");
   };
 
   // 树相关 WS 事件 → 刷新树/状态点(节流,流式时 message 事件很密)
@@ -161,17 +143,13 @@ export function App() {
     return () => { cancelled = true; };
   }, [treeRefresh, tabGroups.updateSpaceTab]);
 
-  // 全局快捷键:⌘P 快开 / ⌘⇧P 命令面板 / ⌘⇧F 搜索
+  // 全局快捷键:⌘P 快开 / ⌘⇧P 命令面板
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "p") {
         e.preventDefault();
         if (e.shiftKey) { setCmdOpen((v) => !v); setQuickOpen(false); }
         else { setQuickOpen((v) => !v); setCmdOpen(false); }
-      }
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "f") {
-        e.preventDefault();
-        openActivity("search");
       }
     };
     window.addEventListener("keydown", onKey);
@@ -193,16 +171,9 @@ export function App() {
   };
 
   const addWorkspace = async () => {
-    setActiveActivity("explorer");
     setMobileNavOpen(true);
     setDesktopNavOpen(true);
     window.dispatchEvent(new Event("arbor:add-workspace"));
-  };
-
-  // 搜索命中:打开文件并跳转到行
-  const openAt = async (id: string, line: number) => {
-    const r = await api.getSpace(id).catch(() => null);
-    if (r?.space) { openNode(r.space); setPendingGoto({ id, line }); }
   };
 
   const commands: Command[] = [
@@ -211,7 +182,6 @@ export function App() {
     { id: "new-file", label: "新建文件", icon: <FileText size={14} />, run: () => createAtCurrentTarget("file") },
     { id: "add-workspace", label: "添加工作区", icon: <FolderPlus size={14} />, run: addWorkspace },
     { id: "quick-open", label: "快速打开…", hint: "⌘P", icon: <Search size={14} />, run: () => setQuickOpen(true) },
-    { id: "search", label: "在所有文件中搜索…", hint: "⌘⇧F", icon: <Search size={14} />, run: () => openActivity("search") },
     { id: "preview", label: "打开预览", icon: <MonitorPlay size={14} />, run: () => tabGroups.openProcess({ groupId: "side" }) },
     {
       id: "move-tab-side",
@@ -248,17 +218,12 @@ export function App() {
     <div className="h-screen flex overflow-hidden bg-bg text-text font-sans relative">
       <SpaceTree
         selectedId={selectedNode?.id || activeSpace?.id || ""}
-        view={activeActivity}
-        onViewChange={openActivity}
         onSelect={openNode}
-        onOpenAt={openAt}
-        onOpenGitDiff={(root, path, staged) => tabGroups.openGitDiff(root, path, staged)}
         onOpenSide={(n) => openNode(n, { groupId: "side" })}
         onOpenTerminal={openTerminal}
+        onOpenGit={openGit}
         createParentId={currentCreateParentId()}
         refreshKey={treeRefresh}
-        gitRefreshKey={gitRefreshKey}
-        showActivityBar={showActivityBar}
         settingsActive={isSettingsTab(tabGroups.activeTab)}
         onOpenSettings={openSettings}
         mobileOpen={mobileNavOpen}
@@ -304,8 +269,8 @@ export function App() {
           onSelect={openNode}
           onOpenNav={toggleNav}
           onOpenSettings={openSettings}
-          onSettingsSaved={onSettingsSaved}
           onGitChanged={refreshGit}
+          onOpenGitDiff={(root, path, staged) => tabGroups.openGitDiff(root, path, staged)}
         />
       </div>
     </div>

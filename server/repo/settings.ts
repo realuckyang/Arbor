@@ -5,7 +5,6 @@ const DEFAULTS = {
   apiUrl: "",
   apiKey: "",
   model: "",
-  showActivityBar: false,
   system:
     "你是 Arbor 里的一个 agent,以一个节点的形式存活在用户的工作树里。\n" +
     "\n" +
@@ -29,15 +28,12 @@ const DEFAULTS = {
     "  • 完成任务后给出最终回复;无须告知用户工具细节。",
 };
 
-const toBool = (value) =>
-  value === true || value === "true" || value === "1" || value === 1;
-
 const getSettings = () => {
   const rows = getDb().prepare("SELECT key, value FROM settings").all();
-  const stored = {};
-  for (const row of rows) stored[row.key] = row.value;
-  const settings = { ...DEFAULTS, ...stored };
-  settings.showActivityBar = toBool(settings.showActivityBar);
+  const settings = { ...DEFAULTS };
+  for (const row of rows) {
+    if (row.key in DEFAULTS) settings[row.key] = row.value;
+  }
   return settings;
 };
 
@@ -47,6 +43,7 @@ const saveSettings = (patch = {}) => {
     "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
   );
   for (const [key, value] of Object.entries(patch)) {
+    if (!(key in DEFAULTS)) continue;
     if (value === undefined || value === null) continue;
     stmt.run(key, String(value));
   }

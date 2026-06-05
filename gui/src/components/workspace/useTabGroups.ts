@@ -3,6 +3,7 @@ import type { Space } from "../../api";
 import {
   isOpenableSpace,
   isSpaceTab,
+  gitTab,
   gitDiffTab,
   processTab,
   PROCESS_TAB_ID,
@@ -110,6 +111,10 @@ export function useTabGroups({ canCloseTab = () => true, onTabClosed = () => {} 
 
   const openTerminal = useCallback((cwd: string, title = "Terminal", opts: { groupId?: WorkspaceGroupId; side?: boolean; command?: string } = {}) => {
     openTab(terminalTab(cwd, title, opts.command), opts);
+  }, [openTab]);
+
+  const openGit = useCallback((root: string, title = "Git", opts: { groupId?: WorkspaceGroupId; side?: boolean } = {}) => {
+    openTab(gitTab(root, title), opts);
   }, [openTab]);
 
   const openGitDiff = useCallback((root: string, filePath: string, staged = false, opts: { groupId?: WorkspaceGroupId; side?: boolean } = {}) => {
@@ -264,6 +269,7 @@ export function useTabGroups({ canCloseTab = () => true, onTabClosed = () => {} 
     openNode,
     openProcess,
     openTerminal,
+    openGit,
     openGitDiff,
     openSettings,
     activateTab,

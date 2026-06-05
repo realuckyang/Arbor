@@ -47,7 +47,6 @@ export type Settings = {
   apiUrl: string;
   apiKey: string;
   model: string;
-  showActivityBar: boolean;
   system: string;
 };
 
@@ -166,6 +165,8 @@ export const api = {
   },
 
   gitStatus: () => request<{ repositories: GitRepositoryStatus[] }>("/api/git/status"),
+  gitRepository: (path: string) =>
+    request<{ repository: GitRepositoryStatus | null }>(`/api/git/repository?path=${encodeURIComponent(path)}`),
   gitDiff: (opts: { root: string; path: string; staged?: boolean }) =>
     request<{ diff: string }>(`/api/git/diff?root=${encodeURIComponent(opts.root)}&path=${encodeURIComponent(opts.path)}${opts.staged ? "&staged=1" : ""}`),
   gitBranches: (root: string) =>
@@ -180,7 +181,7 @@ export const api = {
     request<{ output: string; repository: GitRepositoryStatus }>("/api/git/commit", { method: "POST", ...jsonBody(opts) }),
   gitRemote: (opts: { root: string; action: "fetch" | "pull" | "push" }) =>
     request<{ output: string; repository: GitRepositoryStatus }>("/api/git/remote", { method: "POST", ...jsonBody(opts) }),
-  gitCheckout: (opts: { root: string; branch: string; create?: boolean }) =>
+  gitCheckout: (opts: { root: string; branch: string }) =>
     request<{ output: string; repository: GitRepositoryStatus; branches: GitBranches }>("/api/git/checkout", { method: "POST", ...jsonBody(opts) }),
   gitInit: (opts: { workspacePath: string }) =>
     request<{ output: string; repository: GitRepositoryStatus }>("/api/git/init", { method: "POST", ...jsonBody(opts) }),

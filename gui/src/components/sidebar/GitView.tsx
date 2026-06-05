@@ -23,18 +23,19 @@ const statusClass: Record<GitFileStatus["status"], string> = {
 };
 
 type GitViewProps = {
+  repoPath?: string;
+  repoTitle?: string;
   refreshKey?: number;
   onOpenDiff?: (root: string, path: string, staged?: boolean) => void;
   onChanged?: () => void;
 };
 
-export function GitView({ refreshKey = 0, onOpenDiff, onChanged }: GitViewProps) {
+export function GitView({ repoPath, repoTitle, refreshKey = 0, onOpenDiff, onChanged }: GitViewProps) {
   const [repositories, setRepositories] = useState<GitRepositoryStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [messageByRoot, setMessageByRoot] = useState<Record<string, string>>({});
   const [branchByRoot, setBranchByRoot] = useState<Record<string, GitBranches>>({});
-  const [newBranchByRoot, setNewBranchByRoot] = useState<Record<string, string>>({});
   const [collapsedByRoot, setCollapsedByRoot] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -43,8 +44,13 @@ export function GitView({ refreshKey = 0, onOpenDiff, onChanged }: GitViewProps)
     setLoading(true);
     setError(null);
     try {
-      const result = await api.gitStatus();
-      setRepositories(result.repositories || []);
+      if (repoPath) {
+        const result = await api.gitRepository(repoPath);
+        setRepositories(result.repository ? [result.repository] : []);
+      } else {
+        const result = await api.gitStatus();
+        setRepositories(result.repositories || []);
+      }
     } catch (e: any) {
       setError(e.message || "读取 Git 状态失败");
       setRepositories([]);
@@ -53,7 +59,7 @@ export function GitView({ refreshKey = 0, onOpenDiff, onChanged }: GitViewProps)
     }
   };
 
-  useEffect(() => { load(); }, [refreshKey]);
+  useEffect(() => { load(); }, [repoPath, refreshKey]);
 
   const updateRepo = (repo: GitRepositoryStatus) => {
     setRepositories((current) => current.map((item) => item.root === repo.root || item.workspaceId === repo.workspaceId ? repo : item));
@@ -94,7 +100,7 @@ export function GitView({ refreshKey = 0, onOpenDiff, onChanged }: GitViewProps)
     <div className="flex-1 min-h-0 flex flex-col">
       <div className="flex items-center gap-2 px-3.5 py-2 border-b border-border">
         <GitBranch size={15} className="text-accent" />
-        <span className="flex-1 min-w-0 text-[13px] font-semibold text-text">源代码管理</span>
+        <span className="flex-1 min-w-0 text-[13px] font-semibold text-text">{repoTitle || "源代码管理"}</span>
         <button
           onClick={load}
           className="w-6 h-6 flex items-center justify-center text-text-faint hover:text-text hover:bg-bg-hover disabled:opacity-50"
@@ -123,13 +129,11 @@ export function GitView({ refreshKey = 0, onOpenDiff, onChanged }: GitViewProps)
             expanded={!collapsedByRoot[repo.root || repo.workspaceId]}
             commitMessage={messageByRoot[repo.root || ""] || ""}
             branches={repo.root ? branchByRoot[repo.root] : undefined}
-            newBranch={newBranchByRoot[repo.root || ""] || ""}
             onToggleExpanded={() => {
               const key = repo.root || repo.workspaceId;
               setCollapsedByRoot((current) => ({ ...current, [key]: !current[key] }));
             }}
             onMessageChange={(message) => setMessageByRoot((current) => ({ ...current, [repo.root || ""]: message }))}
-            onNewBranchChange={(branch) => setNewBranchByRoot((current) => ({ ...current, [repo.root || ""]: branch }))}
             onOpenDiff={onOpenDiff}
             onLoadBranches={() => repo.root && loadBranches(repo.root)}
             onRun={run}
@@ -146,10 +150,8 @@ function RepositoryBlock({
   expanded,
   commitMessage,
   branches,
-  newBranch,
   onToggleExpanded,
   onMessageChange,
-  onNewBranchChange,
   onOpenDiff,
   onLoadBranches,
   onRun,
@@ -159,10 +161,8 @@ function RepositoryBlock({
   expanded: boolean;
   commitMessage: string;
   branches?: GitBranches;
-  newBranch: string;
   onToggleExpanded: () => void;
   onMessageChange: (message: string) => void;
-  onNewBranchChange: (branch: string) => void;
   onOpenDiff?: (root: string, path: string, staged?: boolean) => void;
   onLoadBranches: () => void;
   onRun: (label: string, fn: () => Promise<{ repository?: GitRepositoryStatus; output?: string }>) => Promise<void>;
@@ -265,21 +265,6 @@ function RepositoryBlock({
                 {branch === branches.current && <Check size={12} className="ml-auto text-success" />}
               </button>
             ))}
-          </div>
-          <div className="flex border-t border-border">
-            <input
-              value={newBranch}
-              onChange={(e) => onNewBranchChange(e.target.value)}
-              placeholder="新分支名"
-              className="min-w-0 flex-1 bg-transparent px-2 py-1 text-[12px] outline-none"
-            />
-            <button
-              onClick={() => onRun(`branch:${newBranch}`, () => api.gitCheckout({ root, branch: newBranch, create: true }))}
-              disabled={disabled || !newBranch.trim()}
-              className="px-2 text-[12px] text-accent hover:bg-bg-hover disabled:opacity-40"
-            >
-              创建
-            </button>
           </div>
         </div>
       )}

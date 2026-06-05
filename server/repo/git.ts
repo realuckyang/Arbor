@@ -109,10 +109,37 @@ const listGitRepositories = () => {
   return repos;
 };
 
-const repoByRoot = (root) => {
-  const repo = listGitRepositories().find((item) => item.isRepo && item.root === String(root || ""));
-  if (!repo) throw new Error("git repository not found");
+const withSep = (abs) => abs.endsWith(path.sep) ? abs : abs + path.sep;
+const isUnder = (abs, root) => abs === root || abs.startsWith(withSep(root));
+const workspaceForAbs = (abs) =>
+  listWorkspaces()
+    .map((workspace) => ({ ...workspace, path: path.resolve(workspace.path) }))
+    .find((workspace) => isUnder(abs, workspace.path)) || null;
+
+const repositoryStatusForPath = (rawPath) => {
+  const abs = path.resolve(String(rawPath || ""));
+  const workspace = workspaceForAbs(abs);
+  if (!workspace) return null;
+  let st; try { st = fs.statSync(abs); } catch { return null; }
+  if (!st.isDirectory()) return null;
+  const repo = getRepositoryStatus({
+    id: workspace.id,
+    title: path.basename(abs) || workspace.title,
+    path: abs,
+  });
+  if (!repo.isRepo || repo.root !== abs) return null;
+  if (repo.isRepo && repo.root) repo.workspaceTitle = path.basename(repo.root) || repo.workspaceTitle;
   return repo;
+};
+
+const repoByRoot = (root) => {
+  const requestedRoot = path.resolve(String(root || ""));
+  const repo = repositoryStatusForPath(requestedRoot);
+  if (repo?.root === requestedRoot) return repo;
+  if (repo?.root) throw new Error("git repository root mismatch");
+  const known = listGitRepositories().find((item) => item.isRepo && item.root === requestedRoot);
+  if (known) return known;
+  throw new Error("git repository not found");
 };
 
 const refreshRepo = (repo) => getRepositoryStatus({
@@ -214,11 +241,11 @@ const gitRemoteAction = ({ root, action }) => {
   return { output, repository: refreshRepo(repo) };
 };
 
-const gitCheckout = ({ root, branch, create = false }) => {
+const gitCheckout = ({ root, branch }) => {
   const repo = repoByRoot(root);
   const name = String(branch || "").trim();
   if (!name || /[\s~^:?*[\]\\]/.test(name)) throw new Error("invalid branch name");
-  const output = runGitMutation(repo.root, create ? ["checkout", "-b", name] : ["checkout", name]);
+  const output = runGitMutation(repo.root, ["checkout", name]);
   const repository = refreshRepo(repo);
   return { output, repository, branches: gitBranches(repository.root) };
 };
@@ -241,5 +268,6 @@ export {
   gitRemoteAction,
   gitStage,
   gitUnstage,
+  repositoryStatusForPath,
   listGitRepositories,
 };

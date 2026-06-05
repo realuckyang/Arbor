@@ -17,6 +17,7 @@ import {
   gitStage,
   gitUnstage,
   listGitRepositories,
+  repositoryStatusForPath,
 } from "../repo/git.js";
 import { getProcess, listProcesses, startProcess, stopProcess } from "../processes.js";
 import { pickDirectory } from "../directoryPicker.js";
@@ -161,6 +162,9 @@ const handleApi = async (req, res) => {
     // ---- git ----
     if (path === "/api/git/status" && method === "GET") {
       return json(res, 200, { ok: true, repositories: listGitRepositories() });
+    }
+    if (path === "/api/git/repository" && method === "GET") {
+      return json(res, 200, { ok: true, repository: repositoryStatusForPath(url.searchParams.get("path")) });
     }
     if (path === "/api/git/diff" && method === "GET") {
       return json(res, 200, {

@@ -59,6 +59,7 @@ export function WorkspaceLayout({
   onOpenSettings,
   onSettingsSaved,
   onGitChanged,
+  onOpenGitDiff,
 }: {
   groups: WorkspaceGroupState[];
   activeGroupId: WorkspaceGroupId;
@@ -86,6 +87,7 @@ export function WorkspaceLayout({
   onOpenSettings: () => void;
   onSettingsSaved?: (settings: Settings) => void;
   onGitChanged?: () => void;
+  onOpenGitDiff: (root: string, path: string, staged?: boolean) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const splitDragRef = useRef<SplitDragSession | null>(null);
@@ -250,6 +252,7 @@ export function WorkspaceLayout({
               onOpenSettings={onOpenSettings}
               onSettingsSaved={onSettingsSaved}
               onGitChanged={onGitChanged}
+              onOpenGitDiff={onOpenGitDiff}
             />
           </div>
         </Fragment>

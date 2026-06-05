@@ -1,17 +1,19 @@
 import { useRef, useState } from "react";
 import { iconFor, colorFor } from "../explorer/SpaceRow";
-import { X, Menu, Circle, GitCompare, MonitorPlay, PanelRight, Settings, Terminal } from "lucide-react";
+import { X, Menu, Circle, GitBranch, GitCompare, MonitorPlay, PanelRight, Settings, Terminal } from "lucide-react";
 import { ContextMenu, type MenuItem } from "../ui";
 import type { WorkspaceGroupId, WorkspaceTab } from "./types";
 
 const tabIconFor = (tab: WorkspaceTab) =>
   tab.kind === "git-diff" ? GitCompare :
+  tab.kind === "git" ? GitBranch :
   tab.kind === "settings" ? Settings :
   tab.kind === "terminal" ? Terminal :
   tab.kind === "process" ? MonitorPlay : iconFor(tab.kind, tab.title);
 
 const tabColorFor = (tab: WorkspaceTab) =>
   tab.kind === "git-diff" ? "text-accent" :
+  tab.kind === "git" ? "text-accent" :
   tab.kind === "settings" ? "text-text-dim" :
   tab.kind === "terminal" ? "text-success" :
   tab.kind === "process" ? "text-accent" : colorFor(tab.kind);

@@ -6,7 +6,8 @@ import { GitDiffPanel } from "./GitDiffPanel";
 import { ProcessPanel } from "./ProcessPanel";
 import { TerminalPanel } from "./TerminalPanel";
 import { SettingsPanel } from "../settings";
-import { isGitDiffTab, isProcessTab, isSettingsTab, isSpaceTab, isTerminalTab, type WorkspaceTab } from "./types";
+import { GitView } from "../sidebar";
+import { isGitDiffTab, isGitTab, isProcessTab, isSettingsTab, isSpaceTab, isTerminalTab, type WorkspaceTab } from "./types";
 
 type Socket = {
   send: (m: any) => void;
@@ -27,6 +28,7 @@ export function TabContent({
   onOpenSettings,
   onSettingsSaved,
   onGitChanged,
+  onOpenGitDiff,
   onCloseProcess,
   onCloseTerminal,
 }: {
@@ -43,6 +45,7 @@ export function TabContent({
   onOpenSettings: () => void;
   onSettingsSaved?: (settings: Settings) => void;
   onGitChanged?: () => void;
+  onOpenGitDiff: (root: string, path: string, staged?: boolean) => void;
   onCloseProcess: () => void;
   onCloseTerminal: () => void;
 }) {
@@ -54,6 +57,18 @@ export function TabContent({
 
   if (isTerminalTab(tab)) {
     return <TerminalPanel tab={tab} socket={socket} onClose={onCloseTerminal} />;
+  }
+
+  if (isGitTab(tab)) {
+    return (
+      <GitView
+        repoPath={tab.root}
+        repoTitle={tab.title}
+        refreshKey={gitRefreshKey}
+        onOpenDiff={onOpenGitDiff}
+        onChanged={onGitChanged}
+      />
+    );
   }
 
   if (isGitDiffTab(tab)) {

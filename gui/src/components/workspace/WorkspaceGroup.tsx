@@ -40,6 +40,7 @@ export function WorkspaceGroup({
   onOpenSettings,
   onSettingsSaved,
   onGitChanged,
+  onOpenGitDiff,
 }: {
   group: WorkspaceGroupState;
   active: boolean;
@@ -69,6 +70,7 @@ export function WorkspaceGroup({
   onOpenSettings: () => void;
   onSettingsSaved?: (settings: Settings) => void;
   onGitChanged?: () => void;
+  onOpenGitDiff: (root: string, path: string, staged?: boolean) => void;
 }) {
   const tab = activeTabOf(group);
 
@@ -116,6 +118,7 @@ export function WorkspaceGroup({
           onOpenSettings={onOpenSettings}
           onSettingsSaved={onSettingsSaved}
           onGitChanged={onGitChanged}
+          onOpenGitDiff={onOpenGitDiff}
           onCloseProcess={() => onCloseTab(group.id, group.activeId || "")}
           onCloseTerminal={() => onCloseTab(group.id, group.activeId || "")}
         />

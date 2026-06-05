@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Space } from "../../api";
+import type { GitRepositoryStatus, Space } from "../../api";
 import { api } from "../../api";
-import { ActivityBar, type ActivityId } from "../activity";
 import { SpaceRow, InlineCreateRow, iconFor, colorFor, type TreeControls, type DropPosition } from "./SpaceRow";
-import { AgentTreeView } from "./AgentTreeView";
-import { GitView, SearchView } from "../sidebar";
 import { ContextMenu, type MenuItem } from "../ui";
-import { Settings, Folder, FolderPlus, FolderOpen, FileText, Bot, Trash2, Pencil, Plus, X, Copy, PanelRight, Terminal } from "lucide-react";
+import { Settings, Folder, FolderPlus, FolderOpen, FileText, Bot, Trash2, Pencil, Plus, X, Copy, PanelRight, Terminal, GitBranch } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
@@ -25,17 +22,12 @@ const ROOT_ID = "__root__";
 
 export function SpaceTree({
   selectedId,
-  view = "explorer",
-  onViewChange,
   onSelect,
-  onOpenAt,
-  onOpenGitDiff,
   onOpenSide,
   onOpenTerminal,
+  onOpenGit,
   createParentId,
   refreshKey,
-  gitRefreshKey,
-  showActivityBar,
   settingsActive,
   onOpenSettings,
   mobileOpen = false,
@@ -44,17 +36,12 @@ export function SpaceTree({
   onChanged,
 }: {
   selectedId: string;
-  view?: ActivityId;
-  onViewChange?: (id: ActivityId) => void;
   onSelect: (n: Space | null) => void;
-  onOpenAt?: (id: string, line: number) => void;
-  onOpenGitDiff?: (root: string, path: string, staged?: boolean) => void;
   onOpenSide?: (n: Space) => void;
   onOpenTerminal?: (n: Space, opts?: { command?: string; titlePrefix?: string }) => void;
+  onOpenGit?: (repo: GitRepositoryStatus) => void;
   createParentId?: string | null;
   refreshKey: number;
-  gitRefreshKey: number;
-  showActivityBar: boolean;
   settingsActive: boolean;
   onOpenSettings: () => void;
   mobileOpen?: boolean;
@@ -349,10 +336,18 @@ export function SpaceTree({
   };
 
   // ── 右键 ──
-  const onNodeContext = (e: React.MouseEvent, space: Space) => {
+  const onNodeContext = async (e: React.MouseEvent, space: Space) => {
     e.preventDefault();
     e.stopPropagation();
     const items: MenuItem[] = [];
+    let gitRepo: GitRepositoryStatus | null = null;
+    if (space.kind === "space" && onOpenGit) {
+      try {
+        gitRepo = (await api.gitRepository(space.id)).repository;
+      } catch {
+        gitRepo = null;
+      }
+    }
     if (space.kind === "space") {
       items.push(
         { label: "新建智能体", icon: <Bot size={13} className="text-warning" />,
@@ -362,6 +357,16 @@ export function SpaceTree({
           onClick: () => startCreate(space.id, "space") },
         { label: "新建文件", icon: <FileText size={13} className="text-text-faint" />,
           onClick: () => startCreate(space.id, "file") },
+        "divider",
+      );
+    }
+    if (gitRepo?.root) {
+      items.push(
+        {
+          label: `Git 变更 (${gitRepo.files.length})`,
+          icon: <GitBranch size={13} className="text-accent" />,
+          onClick: () => onOpenGit?.(gitRepo!),
+        },
         "divider",
       );
     }
@@ -452,8 +457,6 @@ export function SpaceTree({
     renamingId, renameDraft, setRenameDraft, commitRename, cancelRename,
     activeId, overNodeId: overInfo?.spaceId || null, dropPos: overInfo?.pos || null,
   };
-  const isExplorerView = view === "explorer";
-
   return (
     <DndContext
       sensors={sensors}
@@ -477,12 +480,10 @@ export function SpaceTree({
         <div className="flex items-center gap-2.5 px-3.5 py-3 border-b border-border">
           <span className="text-[20px] leading-none select-none">🌳</span>
           <span className="text-[17px] font-semibold text-text flex-1 tracking-tight">Arbor</span>
-          {isExplorerView && (
-            <button onClick={openNewMenu} title="新建"
-              className="w-6 h-6 rounded flex items-center justify-center text-text-faint hover:text-accent hover:bg-bg-hover transition-colors">
-              <Plus size={16} />
-            </button>
-          )}
+          <button onClick={openNewMenu} title="新建"
+            className="w-6 h-6 rounded flex items-center justify-center text-text-faint hover:text-accent hover:bg-bg-hover transition-colors">
+            <Plus size={16} />
+          </button>
           {onCloseMobile && (
             <button
               onClick={onCloseMobile}
@@ -493,47 +494,36 @@ export function SpaceTree({
           )}
         </div>
 
-        {showActivityBar && <ActivityBar active={view} onSelect={(id) => onViewChange?.(id)} />}
+        <RootDroppable highlight={overRoot} onContextMenu={onBlankContext}>
+          {creatingUnder === "" && <InlineCreateRow depth={0} controls={controls} />}
 
-        {view === "explorer" && (
-          <RootDroppable highlight={overRoot} onContextMenu={onBlankContext}>
-            {creatingUnder === "" && <InlineCreateRow depth={0} controls={controls} />}
+          {roots.map((space) => (
+            <SpaceRow
+              key={space.id}
+              space={space}
+              selectedId={selectedId}
+              onSelect={handleSelect}
+              onContextMenu={onNodeContext}
+              refreshKey={refreshKey}
+              controls={controls}
+            />
+          ))}
 
-            {roots.map((space) => (
-              <SpaceRow
-                key={space.id}
-                space={space}
-                selectedId={selectedId}
-                onSelect={handleSelect}
-                onContextMenu={onNodeContext}
-                refreshKey={refreshKey}
-                controls={controls}
-              />
-            ))}
-
-            {roots.length === 0 && creatingUnder !== "" && (
-              <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-                <div className="text-3xl opacity-80">🌱</div>
-                <div className="text-[13px] text-text-faint leading-relaxed">
-                  还空着。<br />新建一个智能体或文件夹开始生长。
-                </div>
-                <button
-                  onClick={() => startCreate(null, "agent")}
-                  className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-accent text-white text-[13px] hover:opacity-90 transition-opacity"
-                >
-                  <Bot size={13} /> 新建智能体
-                </button>
+          {roots.length === 0 && creatingUnder !== "" && (
+            <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+              <div className="text-3xl opacity-80">🌱</div>
+              <div className="text-[13px] text-text-faint leading-relaxed">
+                还空着。<br />新建一个智能体或文件夹开始生长。
               </div>
-            )}
-          </RootDroppable>
-        )}
-        {view === "agents" && (
-          <AgentTreeView selectedId={selectedId} refreshKey={refreshKey} onSelect={handleSelect} />
-        )}
-        {view === "search" && (
-          <SearchView onOpenAt={(id, line) => onOpenAt?.(id, line)} />
-        )}
-        {view === "git" && <GitView refreshKey={gitRefreshKey} onOpenDiff={onOpenGitDiff} onChanged={onChanged} />}
+              <button
+                onClick={() => startCreate(null, "agent")}
+                className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-accent text-white text-[13px] hover:opacity-90 transition-opacity"
+              >
+                <Bot size={13} /> 新建智能体
+              </button>
+            </div>
+          )}
+        </RootDroppable>
 
         {/* footer */}
         <div className="border-t border-border px-1.5 py-1.5">
