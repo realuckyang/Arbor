@@ -25,6 +25,7 @@ export function TabContent({
   onOpenNav,
   onOpenSettings,
   onSettingsSaved,
+  onGitChanged,
   onCloseProcess,
   onCloseTerminal,
 }: {
@@ -39,6 +40,7 @@ export function TabContent({
   onOpenNav?: () => void;
   onOpenSettings: () => void;
   onSettingsSaved?: (settings: Settings) => void;
+  onGitChanged?: () => void;
   onCloseProcess: () => void;
   onCloseTerminal: () => void;
 }) {
@@ -53,7 +55,7 @@ export function TabContent({
   }
 
   if (isGitDiffTab(tab)) {
-    return <GitDiffPanel tab={tab} />;
+    return <GitDiffPanel tab={tab} onChanged={onGitChanged} />;
   }
 
   if (isSettingsTab(tab)) {

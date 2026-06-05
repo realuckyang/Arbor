@@ -57,6 +57,7 @@ export function WorkspaceLayout({
   onOpenNav,
   onOpenSettings,
   onSettingsSaved,
+  onGitChanged,
 }: {
   groups: WorkspaceGroupState[];
   activeGroupId: WorkspaceGroupId;
@@ -82,6 +83,7 @@ export function WorkspaceLayout({
   onOpenNav?: () => void;
   onOpenSettings: () => void;
   onSettingsSaved?: (settings: Settings) => void;
+  onGitChanged?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const splitDragRef = useRef<SplitDragSession | null>(null);
@@ -244,6 +246,7 @@ export function WorkspaceLayout({
               onOpenNav={onOpenNav}
               onOpenSettings={onOpenSettings}
               onSettingsSaved={onSettingsSaved}
+              onGitChanged={onGitChanged}
             />
           </div>
         </Fragment>

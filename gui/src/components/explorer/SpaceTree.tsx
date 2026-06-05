@@ -34,6 +34,7 @@ export function SpaceTree({
   onOpenTerminal,
   createParentId,
   refreshKey,
+  gitRefreshKey,
   showActivityBar,
   settingsActive,
   onOpenSettings,
@@ -52,6 +53,7 @@ export function SpaceTree({
   onOpenTerminal?: (n: Space, opts?: { command?: string; titlePrefix?: string }) => void;
   createParentId?: string | null;
   refreshKey: number;
+  gitRefreshKey: number;
   showActivityBar: boolean;
   settingsActive: boolean;
   onOpenSettings: () => void;
@@ -531,7 +533,7 @@ export function SpaceTree({
         {view === "search" && (
           <SearchView onOpenAt={(id, line) => onOpenAt?.(id, line)} />
         )}
-        {view === "git" && <GitView onOpenDiff={onOpenGitDiff} onChanged={onChanged} />}
+        {view === "git" && <GitView refreshKey={gitRefreshKey} onOpenDiff={onOpenGitDiff} onChanged={onChanged} />}
 
         {/* footer */}
         <div className="border-t border-border px-1.5 py-1.5">

@@ -11,6 +11,7 @@ import type { ManagedProcess } from "./api";
 export function App() {
   const socket = useSocket();
   const [treeRefresh, setTreeRefresh] = useState(0);
+  const [gitRefreshKey, setGitRefreshKey] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [desktopNavOpen, setDesktopNavOpen] = useState(true);
   const [showActivityBar, setShowActivityBar] = useState(false);
@@ -75,6 +76,7 @@ export function App() {
   const onSettingsSaved = (settings: AppSettings) => {
     setShowActivityBar(!!settings.showActivityBar);
   };
+  const refreshGit = () => setGitRefreshKey((n) => n + 1);
   const openActivity = (id: ActivityId) => {
     setActiveActivity(id);
     if (window.matchMedia("(min-width: 768px)").matches) {
@@ -254,6 +256,7 @@ export function App() {
         onOpenTerminal={openTerminal}
         createParentId={currentCreateParentId()}
         refreshKey={treeRefresh}
+        gitRefreshKey={gitRefreshKey}
         showActivityBar={showActivityBar}
         settingsActive={isSettingsTab(tabGroups.activeTab)}
         onOpenSettings={openSettings}
@@ -297,6 +300,7 @@ export function App() {
           onOpenNav={toggleNav}
           onOpenSettings={openSettings}
           onSettingsSaved={onSettingsSaved}
+          onGitChanged={refreshGit}
         />
       </div>
     </div>

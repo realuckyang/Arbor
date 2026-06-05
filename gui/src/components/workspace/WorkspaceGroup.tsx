@@ -38,6 +38,7 @@ export function WorkspaceGroup({
   onOpenNav,
   onOpenSettings,
   onSettingsSaved,
+  onGitChanged,
 }: {
   group: WorkspaceGroupState;
   active: boolean;
@@ -65,6 +66,7 @@ export function WorkspaceGroup({
   onOpenNav?: () => void;
   onOpenSettings: () => void;
   onSettingsSaved?: (settings: Settings) => void;
+  onGitChanged?: () => void;
 }) {
   const tab = activeTabOf(group);
 
@@ -110,6 +112,7 @@ export function WorkspaceGroup({
           onOpenNav={showNavButton ? onOpenNav : undefined}
           onOpenSettings={onOpenSettings}
           onSettingsSaved={onSettingsSaved}
+          onGitChanged={onGitChanged}
           onCloseProcess={() => onCloseTab(group.id, group.activeId || "")}
           onCloseTerminal={() => onCloseTab(group.id, group.activeId || "")}
         />

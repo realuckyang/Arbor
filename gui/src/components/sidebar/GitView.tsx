@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Check, ChevronRight, GitBranch, GitCommitHorizontal, GitPullRequest, Minus, Plus, RefreshCw, RotateCcw, UploadCloud } from "lucide-react";
+import { Check, ChevronRight, Copy, GitBranch, GitCommitHorizontal, GitCompare, GitPullRequest, Minus, Plus, RefreshCw, RotateCcw, UploadCloud } from "lucide-react";
 import { api, type GitBranches, type GitFileStatus, type GitRepositoryStatus } from "../../api";
+import { ContextMenu, type MenuItem } from "../ui";
 
 const statusText: Record<GitFileStatus["status"], string> = {
   untracked: "U",
@@ -22,11 +23,12 @@ const statusClass: Record<GitFileStatus["status"], string> = {
 };
 
 type GitViewProps = {
+  refreshKey?: number;
   onOpenDiff?: (root: string, path: string, staged?: boolean) => void;
   onChanged?: () => void;
 };
 
-export function GitView({ onOpenDiff, onChanged }: GitViewProps) {
+export function GitView({ refreshKey = 0, onOpenDiff, onChanged }: GitViewProps) {
   const [repositories, setRepositories] = useState<GitRepositoryStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -51,7 +53,7 @@ export function GitView({ onOpenDiff, onChanged }: GitViewProps) {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [refreshKey]);
 
   const updateRepo = (repo: GitRepositoryStatus) => {
     setRepositories((current) => current.map((item) => item.root === repo.root || item.workspaceId === repo.workspaceId ? repo : item));
@@ -166,17 +168,53 @@ function RepositoryBlock({
   onRun: (label: string, fn: () => Promise<{ repository?: GitRepositoryStatus; output?: string }>) => Promise<void>;
 }) {
   const root = repo.root || "";
-  const staged = useMemo(() => repo.files.filter((file) => file.staged), [repo.files]);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  const conflicts = useMemo(() => repo.files.filter((file) => file.status === "conflict"), [repo.files]);
+  const staged = useMemo(() => repo.files.filter((file) => file.staged && file.status !== "conflict"), [repo.files]);
   const unstaged = useMemo(
-    () => repo.files.filter((file) => file.unstaged || file.status === "untracked" || file.status === "conflict"),
+    () => repo.files.filter((file) => file.status !== "conflict" && (file.unstaged || file.status === "untracked")),
     [repo.files],
   );
-  const hasConflict = repo.files.some((file) => file.status === "conflict");
+  const hasConflict = conflicts.length > 0;
   const disabled = !!busy || !root;
 
   const doDiscard = (file: GitFileStatus) => {
     if (!confirm(`丢弃「${file.path}」的更改?\n这个操作不可撤销。`)) return;
     onRun(`discard:${file.path}`, () => api.gitDiscard({ root, path: file.path }));
+  };
+  const toggleGroup = (id: string) =>
+    setCollapsedGroups((current) => ({ ...current, [id]: !current[id] }));
+  const copyPath = async (file: GitFileStatus) => {
+    try { await navigator.clipboard.writeText(file.path); }
+    catch {
+      const ta = document.createElement("textarea");
+      ta.value = file.path;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+  };
+  const openFileMenu = (e: React.MouseEvent, file: GitFileStatus, stagedDiff: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const items: MenuItem[] = [
+      { label: stagedDiff ? "打开暂存更改" : "打开更改", icon: <GitCompare size={13} />, onClick: () => onOpenDiff?.(root, file.path, stagedDiff) },
+      "divider",
+    ];
+    if (file.staged) {
+      items.push({ label: "取消暂存", icon: <Minus size={13} />, onClick: () => onRun(`unstage:${file.path}`, () => api.gitUnstage({ root, path: file.path })) });
+    }
+    if ((file.unstaged || file.status === "untracked") && file.status !== "conflict") {
+      items.push({ label: "暂存更改", icon: <Plus size={13} />, onClick: () => onRun(`stage:${file.path}`, () => api.gitStage({ root, path: file.path })) });
+    }
+    items.push(
+      { label: "复制路径", icon: <Copy size={13} />, onClick: () => copyPath(file) },
+      "divider",
+      { label: "丢弃更改", icon: <RotateCcw size={13} />, danger: true, onClick: () => doDiscard(file) },
+    );
+    setMenu({ x: e.clientX, y: e.clientY, items });
   };
 
   return (
@@ -276,29 +314,49 @@ function RepositoryBlock({
           </div>
 
           <ChangeGroup
+            id="conflicts"
+            title="合并更改"
+            count={conflicts.length}
+            files={conflicts}
+            root={root}
+            collapsed={!!collapsedGroups.conflicts}
+            disabled={disabled}
+            onToggle={() => toggleGroup("conflicts")}
+            onOpenDiff={onOpenDiff}
+            onContextMenu={openFileMenu}
+          />
+          <ChangeGroup
+            id="staged"
             title="暂存的更改"
             count={staged.length}
             files={staged}
             root={root}
             staged
+            collapsed={!!collapsedGroups.staged}
             disabled={disabled}
+            onToggle={() => toggleGroup("staged")}
             onOpenDiff={onOpenDiff}
             onAction={(file) => onRun(`unstage:${file.path}`, () => api.gitUnstage({ root, path: file.path }))}
             actionIcon={<Minus size={12} />}
             actionTitle="取消暂存"
+            onContextMenu={openFileMenu}
             groupAction={staged.length ? { title: "全部取消暂存", onClick: () => onRun("unstage-all", () => api.gitUnstage({ root, all: true })) } : undefined}
           />
           <ChangeGroup
+            id="changes"
             title="更改"
             count={unstaged.length}
             files={unstaged}
             root={root}
+            collapsed={!!collapsedGroups.changes}
             disabled={disabled}
+            onToggle={() => toggleGroup("changes")}
             onOpenDiff={onOpenDiff}
             onAction={(file) => onRun(`stage:${file.path}`, () => api.gitStage({ root, path: file.path }))}
             actionIcon={<Plus size={12} />}
             actionTitle="暂存"
             onDiscard={doDiscard}
+            onContextMenu={openFileMenu}
             groupAction={unstaged.length ? { title: "全部暂存", onClick: () => onRun("stage-all", () => api.gitStage({ root, all: true })) } : undefined}
           />
           {repo.files.length === 0 && (
@@ -306,53 +364,78 @@ function RepositoryBlock({
           )}
         </>
       )}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
     </section>
   );
 }
 
 function ChangeGroup({
+  id,
   title,
   count,
   files,
   root,
   staged = false,
+  collapsed,
   disabled,
   actionIcon,
   actionTitle,
   groupAction,
+  onToggle,
   onOpenDiff,
   onAction,
   onDiscard,
+  onContextMenu,
 }: {
+  id: string;
   title: string;
   count: number;
   files: GitFileStatus[];
   root: string;
   staged?: boolean;
+  collapsed: boolean;
   disabled?: boolean;
-  actionIcon: ReactNode;
-  actionTitle: string;
+  actionIcon?: ReactNode;
+  actionTitle?: string;
   groupAction?: { title: string; onClick: () => void };
+  onToggle: () => void;
   onOpenDiff?: (root: string, path: string, staged?: boolean) => void;
-  onAction: (file: GitFileStatus) => void;
+  onAction?: (file: GitFileStatus) => void;
   onDiscard?: (file: GitFileStatus) => void;
+  onContextMenu?: (e: React.MouseEvent, file: GitFileStatus, staged: boolean) => void;
 }) {
   if (!count) return null;
   return (
     <div className="pb-1">
-      <div className="h-7 flex items-center gap-2 px-3 text-[11px] font-semibold uppercase text-text-faint">
+      <button
+        onClick={onToggle}
+        className="h-7 w-full flex items-center gap-1.5 px-3 text-left text-[11px] font-semibold uppercase text-text-faint hover:bg-bg-hover"
+        title={collapsed ? `展开${title}` : `收起${title}`}
+      >
+        <ChevronRight
+          size={12}
+          className={[
+            "shrink-0 transition-transform",
+            collapsed ? "" : "rotate-90",
+          ].join(" ")}
+        />
         <span className="flex-1 min-w-0 truncate">{title}</span>
         <span className="tabular-nums">{count}</span>
         {groupAction && (
-          <button onClick={groupAction.onClick} className="text-text-faint hover:text-text normal-case" title={groupAction.title}>
+          <span
+            onClick={(e) => { e.stopPropagation(); groupAction.onClick(); }}
+            className="text-text-faint hover:text-text normal-case"
+            title={groupAction.title}
+          >
             {groupAction.title}
-          </button>
+          </span>
         )}
-      </div>
-      {files.map((file) => (
+      </button>
+      {!collapsed && files.map((file) => (
         <div key={`${title}:${file.path}`} className="group flex items-center gap-1 px-2 hover:bg-bg-hover">
           <button
             onClick={() => onOpenDiff?.(root, file.path, staged)}
+            onContextMenu={(e) => onContextMenu?.(e, file, staged)}
             className="min-w-0 flex-1 flex items-center gap-2 py-1 text-left"
             title={file.path}
           >
@@ -361,14 +444,16 @@ function ChangeGroup({
             </span>
             <span className="flex-1 min-w-0 truncate text-[12.5px] text-text-dim">{file.path}</span>
           </button>
-          <button
-            onClick={() => onAction(file)}
-            disabled={disabled || file.status === "conflict"}
-            className="w-5 h-5 hidden max-md:flex group-hover:flex items-center justify-center text-text-faint hover:text-text disabled:opacity-40"
-            title={actionTitle}
-          >
-            {actionIcon}
-          </button>
+          {onAction && actionIcon && actionTitle && (
+            <button
+              onClick={() => onAction(file)}
+              disabled={disabled || file.status === "conflict"}
+              className="w-5 h-5 hidden max-md:flex group-hover:flex items-center justify-center text-text-faint hover:text-text disabled:opacity-40"
+              title={actionTitle}
+            >
+              {actionIcon}
+            </button>
+          )}
           {onDiscard && (
             <button
               onClick={() => onDiscard(file)}
