@@ -52,3 +52,4 @@ coverage/
 
 # agent 工作区(app 托管的真实目录)
 workspaces/
+.claude/launch.json
